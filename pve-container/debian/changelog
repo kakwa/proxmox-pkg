@@ -1,5 +1,17 @@
 pve-container (6.1.26) trixie; urgency=medium
 
+  * d/control: depend on the distro's `lxc` package (>= 6.0.2) plus the
+    new `pve-lxc-data` package instead of the `lxc-pve` fork. The fork
+    is superseded: pve-lxc-data provides the ostype config templates
+    (dropped by upstream in lxc 7.0), the RFC3442-patched
+    dhclient-script and the root subuid/subgid range, while the
+    following patch drops legacy `lxc.cgroup.*` (cgroup v1) settings
+    from generated container configs, which lxc 7 rejects with -EINVAL.
+
+  * PVE/LXC.pm: drop legacy `lxc.cgroup.*` (cgroup v1) settings when
+    writing the generated container config; lxc >= 7 rejects them with
+    -EINVAL and the container would fail to start.
+
   * d/control: require pve-cluster 9.1.13, which ships the helper that backups
     to a backup provider use to read the cluster ID. Requiring
     libpve-cluster-perl 9.1.13 did not ensure that, so a partial upgrade could

@@ -1,0 +1,27 @@
+--- a/PVE/LXC.pm
++++ b/PVE/LXC.pm
+@@ -877,6 +877,13 @@
+     if (my $lxcconf = $conf->{lxc}) {
+         foreach my $entry (@$lxcconf) {
+             my ($k, $v) = @$entry;
++            # Legacy cgroup v1 keys (lxc.cgroup.*) are rejected with -EINVAL by
++            # LXC >= 7, which would prevent the container from starting.
++            # Drop them from the generated config instead.
++            if ($k =~ /^lxc\.cgroup\.(?!2)/) {
++                warn "vm $vmid - $k: dropping legacy cgroup v1 setting (unsupported by LXC >= 7)\n";
++                next;
++            }
+             $had_cpuset = 1 if $k eq 'lxc.cgroup2.cpuset.cpus';
+             $raw .= "$k = $v\n";
+         }
+--- a/PVE/LXC/Config.pm
++++ b/PVE/LXC/Config.pm
+@@ -861,7 +861,7 @@
+     my $validity = $valid_lxc_conf_keys->{$key};
+     return $validity if defined($validity);
+     if ($key =~ /^lxc\.cgroup\./) {
+-        warn "vm $vmid - $key is deprecated, this will be a hard error in the future!\n";
++        warn "vm $vmid - $key is a legacy cgroup v1 setting, ignored on LXC >= 7\n";
+         return 1;
+     }
+     return 1 if $key =~ /^lxc\.cgroup2\./ # allow all cgroup values

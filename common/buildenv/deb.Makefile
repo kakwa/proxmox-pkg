@@ -165,7 +165,10 @@ $(BUILD_DIR)/pkg_built.deb.$(DIST): $(DEB_PREPARE) | $(DIRECTORIES) $(INDIVIDUAL
 		rm -f ../failure.$(DIST); \
 	fi
 	@find $(BUILD_DIR)/ -type f -name "*.deb" -print0 | xargs -0 -r mv -t $(OUT_DIR)/
-	@find $(BUILD_DIR)/ -type f -name "*.orig.tar.gz" -print0 | xargs -0 -r cp -t $(OUT_SRC)/
+	# Copy the canonical source archive only: dpkg-source also leaves a
+	# same-named copy inside the build tree, and copying both to the same
+	# destination makes cp fail ("will not overwrite just-created").
+	@cp -f $(SOURCE_ARCHIVE) $(OUT_SRC)/
 	@find $(BUILD_DIR)/ -type f -name "*.dsc" -print0 | xargs -0 -r mv -t $(OUT_SRC)/
 	@find $(BUILD_DIR)/ -type f -name "*debian.tar.xz" -print0 | xargs -0 -r mv -t $(OUT_SRC)/
 	@touch $@

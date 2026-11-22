@@ -47,4 +47,11 @@ $(SOURCE_ARCHIVE): $(SOURCE_DIR) $(CACHE) Makefile MANIFEST $(DIRECTORIES)
 	@mkdir -p $(SOURCE_DIR)
 	@cp -a $(SOURCE_DIR).tmp/src/. $(SOURCE_DIR)/
 	@rm -rf $(SOURCE_DIR).tmp
+	# Local modifications (kept as reviewable patches in debian/patches/,
+	# applied here because the build flow does not run quilt on its own).
+	@for p in debian/patches/*.patch; do \
+	    if [ -f "$$p" ]; then \
+	        patch -p1 -d $(SOURCE_DIR) < "$$p" || exit 1; \
+	    fi; \
+	  done
 	@$(SOURCE_TAR_CMD)

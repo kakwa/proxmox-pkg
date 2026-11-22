@@ -22,7 +22,7 @@
 #      deps are not yet resolvable are skipped - the retry loop in the
 #      root Makefile builds them in a later pass.
 #
-# NOTE: do NOT dpkg-install unrelated local packages (lxc-pve,
+# NOTE: do NOT dpkg-install unrelated local packages (pve-lxc-data,
 # librados2-perl, ...): their unresolvable deps (Ceph, not-yet-built
 # packages) make aptitude's problem resolver report "Unable to resolve
 # dependencies" even for builds that do not need them.

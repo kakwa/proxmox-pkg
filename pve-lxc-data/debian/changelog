@@ -1,0 +1,7 @@
+pve-lxc-data (1.0-1~kw+sid1) sid; urgency=medium
+
+  * Initial release: LXC ostype config templates and RFC3442
+    dhclient-script for Proxmox VE containers on stock LXC
+    (extracted from the lxc-pve fork).
+
+ -- kakwa <carpentier.pf@gmail.com>  Sun, 22 Nov 2026 18:00:00 +0100

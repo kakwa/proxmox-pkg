@@ -1,0 +1,21 @@
+Source: pve-lxc-data
+Section: admin
+Priority: optional
+Maintainer: @MAINTAINER@ <@MAINTAINER_EMAIL@>
+Build-Depends: debhelper-compat (= 13),
+Standards-Version: 4.7.2
+Homepage: @URL@
+
+Package: pve-lxc-data
+Architecture: all
+Depends: uidmap,
+         ${misc:Depends},
+Conflicts: lxc-pve,
+Replaces: lxc (>= 6.0.1),
+          lxc-common (>= 6.0.1),
+Description: @SUMMARY@
+ @DESCRIPTION@
+ The LXC ostype configuration templates (the files referenced by
+ lxc.include in Proxmox container configs) and the dhclient-script
+ with RFC3442 classless static route support, which the stock LXC
+ packages do not provide.

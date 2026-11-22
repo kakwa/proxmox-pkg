@@ -1,0 +1,2 @@
+config/* /usr/share/lxc/config/
+hooks/dhclient-script /usr/share/lxc/hooks/

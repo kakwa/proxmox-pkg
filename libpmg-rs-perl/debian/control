@@ -4,6 +4,7 @@ Priority: optional
 Build-Depends: debhelper-compat (= 13),
                dh-cargo (>= 25),
                cargo:native <!nocheck>,
+               libcrypt-dev,
                librust-anyhow-1+default-dev,
                librust-hex-0.4+default-dev,
                librust-http-1+default-dev,

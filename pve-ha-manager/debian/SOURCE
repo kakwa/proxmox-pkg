@@ -1,0 +1,2 @@
+git clone git://git.proxmox.com/git/pve-ha-manager.git
+git checkout d99e44fdb62a0aefed9c81d55254941eeb68a348

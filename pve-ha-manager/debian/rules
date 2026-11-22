@@ -1,0 +1,40 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Sample debian/rules that uses debhelper.
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+%:
+	dh $@
+
+override_dh_install:
+	# embed copies of libpve-common-perl files needed by simulator
+	install -d -m 0755 debian/tmp/usr/share/pve-ha-simulator/PVE
+	install -m 0644 \
+		/usr/share/perl5/PVE/Exception.pm \
+		/usr/share/perl5/PVE/File.pm \
+		/usr/share/perl5/PVE/JSONSchema.pm \
+		/usr/share/perl5/PVE/ProcFSTools.pm \
+		/usr/share/perl5/PVE/SafeSyslog.pm \
+		/usr/share/perl5/PVE/SectionConfig.pm \
+		/usr/share/perl5/PVE/Syscall.pm \
+		/usr/share/perl5/PVE/Tools.pm \
+		/usr/share/perl5/PVE/UPID.pm \
+		debian/tmp/usr/share/pve-ha-simulator/PVE/
+	dh_install
+
+override_dh_missing:
+	dh_missing --fail-missing
+
+# dh_systemd_enable watchdog-mux despite it being static to get it installed in
+# the correct location/package without manual intervention
+override_dh_installsystemd:
+	dh_installsystemd -ppve-ha-manager --name watchdog-mux --no-restart-after-upgrade --no-stop-on-upgrade watchdog-mux.service
+	# restart LRM first, else single-node clusters with configured HA will deadlock
+	dh_installsystemd -ppve-ha-manager --name pve-ha-lrm pve-ha-lrm.service
+	dh_installsystemd -ppve-ha-manager --name pve-ha-crm pve-ha-crm.service

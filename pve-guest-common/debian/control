@@ -1,0 +1,32 @@
+Source: libpve-guest-common-perl
+Section: perl
+Priority: optional
+Maintainer: @MAINTAINER@ <@MAINTAINER_EMAIL@>
+Build-Depends: debhelper-compat (= 13),
+               libpve-cluster-perl,
+               libpve-common-perl (>= 9.2.12),
+               libpve-storage-perl (>= 8.3.4),
+               libtest-mockmodule-perl,
+               pve-cluster (>= 9.1.11),
+Standards-Version: 4.6.2
+Homepage: https://www.proxmox.com
+
+Package: libpve-guest-common-perl
+Architecture: all
+Depends: libpve-access-control,
+         libpve-cluster-perl (>= 8.1.0),
+         libpve-common-perl (>= 9.2.12),
+         libpve-storage-perl (>= 8.3.4),
+         proxmox-websocket-tunnel,
+         pve-cluster (>= 9.1.11),
+         ${misc:Depends},
+         ${perl:Depends},
+Breaks: libpve-common-perl (<< 4.0-89),
+        libpve-http-server-perl (<< 5.0.2),
+        pve-container (<< 3.1-4),
+        pve-manager (<< 8.0.0~7),
+        qemu-server (<< 6.1-19),
+Replaces: libpve-common-perl (<< 4.0-89), pve-manager (<< 4.4-10),
+Description: Proxmox VE common guest-related modules
+ This package contains a common code base for Proxmox VE guests. It is mainly
+ used by pve-container and qemu-server.

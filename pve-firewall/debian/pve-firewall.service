@@ -1,0 +1,21 @@
+[Unit]
+Description=Proxmox VE firewall
+ConditionPathExists=/usr/sbin/pve-firewall
+Wants=pve-cluster.service pvefw-logger.service
+After=pvefw-logger.service pve-cluster.service network.target systemd-modules-load.service
+DefaultDependencies=no
+Before=shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+ExecStartPre=-/usr/bin/update-alternatives --set ebtables /usr/sbin/ebtables-legacy
+ExecStartPre=-/usr/bin/update-alternatives --set iptables /usr/sbin/iptables-legacy
+ExecStartPre=-/usr/bin/update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+ExecStart=/usr/sbin/pve-firewall start
+ExecStop=/usr/sbin/pve-firewall stop
+ExecReload=/usr/sbin/pve-firewall restart
+PIDFile=/run/pve-firewall.pid
+Type=forking
+
+[Install]
+WantedBy=multi-user.target

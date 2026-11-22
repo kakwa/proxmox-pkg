@@ -1,0 +1,570 @@
+libpve-http-server-perl (6.0.7) trixie; urgency=medium
+
+  * request: do not handle a pipelined request while the response to a previous
+    one is still in progress. On a reused connection this could mix up their
+    responses.
+
+  * streamed downloads: do not send a TLS close notify if the response gets
+    aborted before its end, for example because reading the source failed. A
+    truncated download could otherwise look complete to the client.
+
+  * disconnect: also send the TLS close notify when closing the connection
+    after a response that could not be written out immediately, for example
+    to a slowly reading client. It was lost in that case, so clients could
+    report an unexpected EOF despite having received the whole response.
+
+  * streamed downloads, such as the single file restore one: close the
+    connection at the end of the response with a TLS close notify. Clients
+    using OpenSSL 3, such as curl, otherwise fail with an unexpected EOF error
+    despite having received the complete download.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 05 Nov 2026 13:42:23 +0100
+
+libpve-http-server-perl (6.0.6) trixie; urgency=medium
+
+  * static files: report that a requested path is a directory instead of
+    failing with an unclear "unable to detect content type" error, and fix a
+    typo in an internal error message.
+
+  * access log:
+    - write each entry at once, so that on local file systems entries of other
+      worker processes can no longer end up in the middle of a long entry.
+      Unauthenticated clients could use this to forge log entries.
+    - log the request as the server parsed it and escape double quotes,
+      backslashes and non-printable characters as "\xXX", like nginx does.
+      Clients can thus neither inject terminal control sequences nor fake
+      fields, while entries of well-formed requests do not change.
+    - include the cause, such as a full or read-only file system, in the error
+      logged when writing an entry fails.
+    - deprecate the 'logfh' option for passing an opened log handle in favor
+      of the 'logfile' option, which ensures entries are written in one piece.
+
+  * request handling:
+    - reject requests that repeat the Content-Length, Host or Cookie header
+      with a 400 error, as the repeated values would get combined and could be
+      interpreted differently than intended.
+    - no longer treat underscores in header names as hyphens, so for example a
+      'Content_Length' header is ignored instead of being used as
+      'Content-Length', as a proxy in front may treat it as an unrelated
+      header. A front proxy that sends the configured real IP header with
+      underscores needs to use hyphens instead.
+    - reject request lines longer than 64 KiB with a 414 error. This prevents
+      clients from appending huge entries to the access log, while leaving
+      ample room for API calls with long query strings.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 31 Oct 2026 21:42:40 +0100
+
+libpve-http-server-perl (6.0.5) trixie; urgency=medium
+
+  * server: add timestamps as prefix to debug logs.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Oct 2025 18:48:47 +0200
+
+libpve-http-server-perl (6.0.4) trixie; urgency=medium
+
+  * add gzip's "gz" as supported file extensions
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 Aug 2025 11:37:34 +0200
+
+libpve-http-server-perl (6.0.3) trixie; urgency=medium
+
+  * proxy config: read MAX_WORKERS integer key.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Jul 2025 18:46:59 +0200
+
+libpve-http-server-perl (6.0.2) trixie; urgency=medium
+
+  * add 'mo' as valid file extension.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 25 Jul 2025 12:37:09 +0200
+
+libpve-http-server-perl (6.0.1) trixie; urgency=medium
+
+  * add 'wasm' as valid file extension.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 15 Jul 2025 21:24:36 +0200
+
+libpve-http-server-perl (6.0.0) trixie; urgency=medium
+
+  * rebuild for Debian 13 Trixie based Proxmox releases.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 10 Jun 2025 10:25:13 +0200
+
+libpve-http-server-perl (5.2.2) bookworm; urgency=medium
+
+  * handle issues with clients where they actively disconnect while we also
+    actively try to close the connection, so that both happens in parallel.
+    This fixes a regression with the last update that mostly affected setups
+    with a reverse proxy like HAProxy in front of the Provmox VE API daemon,
+    where the race to close the connection was amplified due to the almost
+    non-existent latency between those two components and seemingly also by
+    how aggresive HAProxy closes connections.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Apr 2025 16:44:09 +0200
+
+libpve-http-server-perl (5.2.1) bookworm; urgency=medium
+
+  * fix #6230: increase allowed post size from 64 KiB to 512 KiB to
+    accommodate large resource mappings or any other configuration where
+    entries can grow very big.
+
+  * fix unexpected EOF for client when closing TLS session.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Apr 2025 21:44:15 +0200
+
+libpve-http-server-perl (5.2.0) bookworm; urgency=medium
+
+  * fix external linking when cookie was acquired via HTML formatter due to
+    overly strict SameSite attribute.
+
+  * fix #5699: add support to define a HTTP header from which the real IP of a
+    connection should be parsed from. This can be useful for setups with a
+    reverse proxy in front of the API server.
+    On top of that add support for optionally configuring an allow-list of IP
+    networks that the real source IP must match one to allow the connection to
+    be handled.
+
+  * Always stringify error for responses to the 'extjs' formatter explicitly
+    to avoid the call to to_json fail when trying to serialize a blessed
+    object, like a PVE::APIClient::Exception.
+
+  * fix #6503: return error messages from the API also for the json formatter.
+
+  * fix #4816: do not try to disconnect twice if client sends no data,
+    avoiding a false-positive error in the system log.
+
+  * add error message directly into the HTTP body if it's empty, making it
+    easier for HTTP clients that do not have access to the HTTP headers to
+    extract said error message.
+
+  * use the '500 Internal Server Error' HTTP error response were appropriate
+    instead of '501 Not Implemented'.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 28 Jan 2025 16:08:54 +0100
+
+libpve-http-server-perl (5.1.2) bookworm; urgency=medium
+
+  * fix #5391: proxy request: avoid "HTTP 599 Too many redirections" error
+    that could occur due to long-running requests and bad timing during
+    connection reuse. Disable connection reuse for all but GET requests that
+    are proxied between different nodes, and allow one retry in this case.
+
+    This can add a tiny bit of overhead if many PUT requests that are proxied
+    to other nodes are issued with only a small delay between each other.
+    However, such a high-frequency PUT request pattern is considered an edge
+    case, and benchmarks show that the slowdown is about 2ms on average, which
+    is often negligible compared to the actual time required to process the
+    request.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 04 Oct 2024 14:02:39 +0200
+
+libpve-http-server-perl (5.1.1) bookworm; urgency=medium
+
+  * handler: only allow downloads for annotated endpoints and remove support
+    for directly returned download info
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 23 Sep 2024 11:07:22 +0200
+
+libpve-http-server-perl (5.1.0) bookworm; urgency=medium
+
+  * http: support the deflate compression content encoding
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Apr 2024 13:14:26 +0200
+
+libpve-http-server-perl (5.0.6) bookworm; urgency=medium
+
+  * access control: avoid "uninitialized value" warning if using IP
+    ranges
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 26 Mar 2024 09:16:48 +0100
+
+libpve-http-server-perl (5.0.5) bookworm; urgency=medium
+
+  * fix #4859: properly configure TLSv1.3 only mode
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 03 Nov 2023 12:06:31 +0100
+
+libpve-http-server-perl (5.0.4) bookworm; urgency=medium
+
+  * fix #4802: reduce CA lookups while proxying with OpenSSL as packaged in
+    Debian 12 Bookworm.
+
+  * avoid AnyEvent::AIO to fix CPU spinning if the pure-perl implementation
+    libanyevent-aio-perl is installed, for example on development machines
+    when trying to use the perl language server.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 03 Jul 2023 09:38:56 +0200
+
+libpve-http-server-perl (5.0.3) bookworm; urgency=medium
+
+  * proxy request: handle missing content-type header
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 09 Jun 2023 18:58:05 +0200
+
+libpve-http-server-perl (5.0.2) bookworm; urgency=medium
+
+  * formatter/bootstrap: set SameSite attr of auth cookie to 'strict'
+
+  * when proxying requests, preserve json formatting instead of converting to
+    x-www-form-urlencoded
+
+  * support actual arrays for array parameters, as a replacement for '-list' and
+    '-alist' formats
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Jun 2023 13:21:19 +0200
+
+libpve-http-server-perl (5.0.1) bookworm; urgency=medium
+
+  * fix regression in the html (bootstrap) based API debug explorer, which
+    came in through a more strict pattern checking in a newer version of the
+    used URL encoding library
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 03 Jun 2023 15:15:47 +0200
+
+libpve-http-server-perl (5.0.0) bookworm; urgency=medium
+
+  * switch over to native versioning
+
+  * various small code and packaging clean ups
+
+  * re-build for Debian 12 Bookworm based releases
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 17 May 2023 07:26:11 +0200
+
+libpve-http-server-perl (4.2-3) bullseye; urgency=medium
+
+  * file upload: don't always calculate MD5 for syslog message, rather log the
+    file name instead,
+
+  * explicitly disallow tmpfilename parameter in query URL
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Apr 2023 16:27:07 +0200
+
+libpve-http-server-perl (4.2-2) bullseye; urgency=medium
+
+  * multipart upload: properly parse file parts without Content-Type
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 11 Apr 2023 14:44:03 +0200
+
+libpve-http-server-perl (4.2-1) bullseye; urgency=medium
+
+  * fix #4494: redirect incoming HTTP requests to HTTPS to avoid common
+    pitfall when opening the Proxmox VE or Proxmox Mail Gateway web-interface
+    for the first time
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Mar 2023 16:57:59 +0100
+
+libpve-http-server-perl (4.1-6) bullseye; urgency=medium
+
+  * multipart upload: fix upload of files starting with newlines
+
+  * multipart upload: don't fail on presebce of additional headers
+
+  * multipart upload: loosen trailing-newline requirement from spec, as some
+    more popular clients (e.g., postman) violate that rule.
+
+  * fix #4344: http-server: fix regression that required the 'Content-Type' to
+    be always present for multipart headers, while it wasn't used at all.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 06 Mar 2023 13:39:57 +0100
+
+libpve-http-server-perl (4.1-5) bullseye; urgency=medium
+
+  * upload: re-allow having white-space in filenames
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Nov 2022 16:43:31 +0100
+
+libpve-http-server-perl (4.1-4) bullseye; urgency=medium
+
+  * acknowledge content-disposition header
+
+  * request: add missing early return to future proof error check
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Sep 2022 14:37:05 +0200
+
+libpve-http-server-perl (4.1-3) bullseye; urgency=medium
+
+  * response: forbid linefeeds in response status message
+
+  * proxy request: assert that API url starts with a slash
+
+  * pass through streaming: only allow from privileged local pvedaemon as
+    safety net
+
+  * requests: assert that there is no @ in the URLs authority
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 02 Jul 2022 09:16:21 +0200
+
+libpve-http-server-perl (4.1-2) bullseye; urgency=medium
+
+  * tls: log failure to apply TLS 1.3 ciphers
+
+  * html formatter: encode href attributes for API debug viewer
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 May 2022 16:40:12 +0200
+
+libpve-http-server-perl (4.1-1) bullseye; urgency=medium
+
+  * web socket: guard disconnect block check properly
+
+  * avoid warning if request params does not exist
+
+  * fix #3807: don't attempt response on closed handle
+
+  * fix #3790: allow setting TLS 1.3 cipher suites
+
+  * fix #3745: allow overriding TLS key location
+
+  * fix #3789: allow disabling TLS v1.2/v1.3
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 13 Jan 2022 13:32:43 +0100
+
+libpve-http-server-perl (4.0-4) bullseye; urgency=medium
+
+  * webproxy: handle unflushed write buffer
+
+  * fix #3724: disable TLS renegotiation
+
+  * download-stream: allow the api call to set the content-encoding
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 24 Nov 2021 18:14:53 +0100
+
+libpve-http-server-perl (4.0-3) bullseye; urgency=medium
+
+  * anyevent: move unlink from http-server to endpoint
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 04 Oct 2021 10:18:12 +0200
+
+libpve-http-server-perl (4.0-2) pve pmg; urgency=medium
+
+  * AnyEvent/websocket_proxy: remove 'base64' handling
+
+  * AnyEvent/websocket_proxy: drop handling of websocket subprotocols
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 18 May 2021 10:19:00 +0200
+
+libpve-http-server-perl (4.0-1) bullseye; urgency=medium
+
+  * rebuild for Debian 11 Bullseye based releases
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 May 2021 16:37:34 +0200
+
+libpve-http-server-perl (3.2-2) pve pmg; urgency=medium
+
+  * access control: correctly match v4-mapped-v6 addresses
+
+  * access control: also match any IPv6 in 'ALL'
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 07 May 2021 17:49:34 +0200
+
+libpve-http-server-perl (3.2-1) pve pmg; urgency=medium
+
+  * allow 'download' to be passed from API handler
+
+  * utils: add LISTEN_IP option in proxy configuration
+
+  * support streaming data form a file handle to a client
+
+  * allow stream download from path and over short-cutted pvedaemon-proxy
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 23 Apr 2021 13:54:04 +0200
+
+libpve-http-server-perl (3.1-1) pve pmg; urgency=medium
+
+  * accept connection phase: fix connection count leak
+
+  * accept connection phase: immediately close socket on early error
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 11 Dec 2020 08:39:36 +0100
+
+libpve-http-server-perl (3.0-6) pve pmg; urgency=medium
+
+  * fix #2766: allow application/json as content-type for post/put requests
+
+  * increase maximal accepted header count to 64. Modern browsers and proxy
+    combinations can exceed the old limit of 30. The maximal accumulated total
+    header size of 8 KiB stays untouched.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 02 Jul 2020 09:42:39 +0200
+
+libpve-http-server-perl (3.0-5) pve pmg; urgency=medium
+
+  * partially fix #2618: use new unified spice port range helper from
+    pve-common, increases maximum proxy port for spice to 61999
+
+  * Websocket: implement ping/pong from RFC
+
+  * Websocket: performance improvements
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Mar 2020 16:12:45 +0100
+
+libpve-http-server-perl (3.0-4) pve pmg; urgency=medium
+
+  * allow ticket in 'Authorization' header as fallback
+
+  * api-server: extract, set and handle API token header
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 29 Jan 2020 09:32:04 +0100
+
+libpve-http-server-perl (3.0-3) pve pmg; urgency=medium
+
+  * send_file_start: allow to pass a open fh and content-type
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 11 Oct 2019 11:25:12 +0200
+
+libpve-http-server-perl (3.0-2) pve pmg; urgency=medium
+
+  * decode_urlencoded: cope with undefined values
+
+  * anyevent: rpcenv is optional and from our child instance
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Jul 2019 19:30:23 +0200
+
+libpve-http-server-perl (3.0-1) pve pmg; urgency=medium
+
+  * rebuild for Debian Buster / PVE 6.0
+
+  * update jQuery to 3.4.1
+
+  * update Bootstrap to 3.4.1
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 May 2019 21:35:00 +0200
+
+libpve-http-server-perl (2.0-13) unstable; urgency=medium
+
+  * tls: make dh to openssl 1.1 compatible
+
+  * store Host header in rpc environment
+
+  * forward Host header in proxy_request
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 03 Apr 2019 13:55:44 +0200
+
+libpve-http-server-perl (2.0-12) unstable; urgency=medium
+
+  * Allow one to specify 'honor_cipher_order' and 'compression' parameters
+
+  * move read_proxy_conf from PVE::API2Tools to new PVE::ApiServer::Utils module
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 26 Feb 2019 07:07:31 +0100
+
+libpve-http-server-perl (2.0-11) unstable; urgency=medium
+
+  * fix #1935: spice proxy: read empty line after 200 OK
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Sep 2018 10:41:22 +0200
+
+libpve-http-server-perl (2.0-10) unstable; urgency=medium
+
+  * fix #1869: send correct http response in spice proxy
+
+  * websocket: set $max_payload_size = 128*1024; (131072)
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 17 Aug 2018 08:29:53 +0200
+
+libpve-http-server-perl (2.0-9) unstable; urgency=medium
+
+  * Fix #1684 WebSocket proxy behind a buffered proxy
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 28 May 2018 10:33:41 +0200
+
+libpve-http-server-perl (2.0-8) unstable; urgency=medium
+
+  * auth_handler: handle exceptions correctly instead of always returning 401
+
+  * add 'map' filetype to http-server
+
+  * do not send websocket status code to port
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 11 Dec 2017 15:35:34 +0100
+
+libpve-http-server-perl (2.0-7) unstable; urgency=medium
+
+  * add content type application/x-compressed-tar
+
+  * allow API calls to download file contents
+
+  * build: reformat debian/control
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 14 Nov 2017 08:05:17 +0100
+
+libpve-http-server-perl (2.0-6) unstable; urgency=medium
+
+  * pass $format to rest_handler()
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 10 Aug 2017 12:05:42 +0200
+
+libpve-http-server-perl (2.0-5) unstable; urgency=medium
+
+  * add json/mp3/oga/svg MIME types for the new novnc
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 02 Jun 2017 12:49:02 +0200
+
+libpve-http-server-perl (2.0-4) unstable; urgency=medium
+
+  * assume all parameters are utf8 encoded
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 02 May 2017 11:55:21 +0200
+
+libpve-http-server-perl (2.0-3) unstable; urgency=medium
+
+  * avoid locale specific time stamps
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Apr 2017 07:43:29 +0200
+
+libpve-http-server-perl (2.0-2) unstable; urgency=medium
+
+  * fix #1332: allow ECDHE with all supported curves
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 03 Apr 2017 15:11:38 +0200
+
+libpve-http-server-perl (2.0-1) unstable; urgency=medium
+
+  * bump version for debian stretch
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 10 Mar 2017 08:50:55 +0100
+
+libpve-http-server-perl (1.0-4) unstable; urgency=medium
+
+  * add debian triggers file
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 21 Jan 2017 16:36:47 +0100
+
+libpve-http-server-perl (1.0-3) unstable; urgency=medium
+
+  * console-demo.pl: add a more complex demo
+
+  * call Net::SSLeay::ERR_clear_error after all handlers
+
+  * avoid warnings when clients disconnects early
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 21 Jan 2017 16:19:20 +0100
+
+libpve-http-server-perl (1.0-2) unstable; urgency=medium
+
+  * simple-demo.pl: simple demo server for testing
+
+  * extract_auth_cookie: always call uri_unescape($ticket)
+
+  * use canonical flag for json format
+
+  * remove base_handler_class from required arguments
+
+  * remove all references to rpcenv
+
+  * include jquery and bootstrap
+
+  * new helper add_dirs
+
+  * add new hook function to generate CSRF token
+
+  * add generic formatter framework
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Jan 2017 18:39:21 +0100
+
+libpve-http-server-perl (1.0-1) unstable; urgency=medium
+
+  * first try
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 13 Jan 2017 12:47:07 +0100
+

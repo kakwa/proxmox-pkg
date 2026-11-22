@@ -1,0 +1,1064 @@
+pve-firewall (6.0.9) trixie; urgency=medium
+
+  * host options: drop the technology preview note from the option enabling
+    the nftables based firewall. It stays opt-in, as the option remains
+    disabled by default.
+
+  * logger: fix several issues of the daemon writing the firewall log:
+    - keep log entries within their buffer. If the description of a packet
+      or conntrack event did not fit, for example of an IPv6 packet with
+      many extension headers, heap memory following the entry could end up
+      in the firewall log. For packets, the newline could also go missing,
+      joining the next entry to the same line. Packets hitting a logging
+      rule could trigger this.
+    - fix a memory leak of 512 bytes per entry dropped while the log queue
+      is full, for example during a flood of logged packets.
+    - fix a crash on log messages without packet data, for example from a
+      custom logging rule with a zero copy length.
+    - check IPv6 extension headers, routing headers and neighbor discovery
+      messages against the length of the packet, so that truncated ones are
+      logged as invalid instead of with data read from past its end.
+    - log ICMPv6 messages with a non-zero code, such as port unreachable
+      errors, with their actual type, code and parameters instead of bogus
+      ones or as invalid.
+    - log valid IPv6 routing headers of type 2 (Mobile IPv6) with their
+      home address instead of as invalid, and no longer flag type 0
+      headers with all segments left as invalid. Also add the missing
+      space after the routing header fields.
+    - fix the offset, more-fragments flag and identification logged for
+      IPv6 fragments, and no longer reject fragments with a non-zero
+      reserved byte.
+    - log IPv4 packets with a header length below 20 bytes as invalid
+      instead of with ports and flags made up from the IPv4 header, and log
+      the header of packets that end right after it instead of only
+      INVALID=IHL.
+    - add the missing space after the UDP header fields, which glued a
+      logged packet mark to the UDP length, for example "LEN=8mark=1".
+    - fix the gateway address of IPv4 ICMP redirects, which was logged
+      with its bytes reversed on little-endian hosts like x86.
+    - log the pointer of ICMPv6 parameter problem messages as a number.
+      Pointers 0 to 2 were logged as names of problem codes instead.
+    - log the destination of ICMPv6 redirects as DESTINATION= instead of
+      GATEWAY=, as the gateway is the target, already logged as TARGET=.
+    - only log the protocol of non-first fragments instead of their
+      payload parsed as transport header, which showed made-up ports and
+      flags.
+    - log the reachable time and retransmission timer of ICMPv6 router
+      advertisements as unsigned numbers, which showed values from 2^31 on
+      as negative.
+    - flag IPv6 type 2 routing headers with more than one segment left
+      with INVALID=SEGMENTS, as they hold exactly one address.
+    - stop parsing at the end of the IP packet as given by its header, so
+      that link-layer padding captured with a short frame is not logged as
+      its transport header.
+    - log packets larger than about 8 KiB, like jumbo frames or segmentation
+      offload units of bulk transfers. With the logging rules of the
+      Proxmox VE firewall, they were silently missing from the log, as their
+      netlink messages did not fit into the receive buffer.
+    - report in the system log, and if possible in the firewall log, when
+      the kernel dropped log entries as the daemon did not keep up with
+      reading them, for example during a flood of logged packets. Such
+      losses went unnoticed so far.
+    - log the entries that the kernel still held back, or that still waited
+      to be read, when the daemon stops, instead of losing them, for example
+      on a restart during a package upgrade.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Nov 2026 11:49:29 +0100
+
+pve-firewall (6.0.8) trixie; urgency=medium
+
+  * ipset: merge entries that the kernel stores as the same network, for
+    example an alias with host bits like 192.0.2.5/24 next to an entry for
+    192.0.2.0/24. Restoring the IP sets failed for such entries, which
+    blocked every firewall update on the node. IP sets with host bits in
+    an entry are also no longer recreated on every update cycle.
+
+  * ipfilter: drop all ARP from guests whose IP filter allows no IPv4
+    address, for example with an ipfilter-netX set containing only IPv6
+    entries or for a container using DHCP. Their IPv4 traffic apart from
+    DHCP was already dropped, but they could still send ARP with any
+    sender address and so poison the ARP caches of other hosts.
+
+  * fix #8261: config: speed up reading aliases and IPSet entries again.
+    A costly check of every entry, added in version 6.0.6, slowed down
+    parsing the configuration, and with it every firewall update, with
+    large IP sets, for example from 0.4 to 6 seconds for about 30000
+    entries.
+
+  * aliases: accept host bits in CIDRs with a /0 prefix, like 10.0.0.1/0,
+    as for any other prefix length. The API rejected them, and since
+    version 6.0.6 such aliases also failed to load from the configuration.
+
+  * rules: fix the handling of ICMP types in the destination port field:
+    - generate such rules for the protocol ipv6-icmp as for icmpv6. The
+      API accepted them, but they were skipped when generating the
+      ruleset and take effect now.
+    - only accept a single ICMP type that is valid for the protocol's
+      address family. Lists, ranges and types of the other family passed
+      the API, but were skipped when generating the ruleset. Service
+      names were used as the ICMP type of their port number, for example
+      'daytime' matched timestamp-request. Such rules are now reported as
+      invalid.
+    - reject numeric types with a leading zero, which iptables reads as
+      octal. For example, '010' matched type 8, and '08' kept the ruleset
+      of the whole node from being applied.
+
+  * security groups: contain errors in groups and in references to them.
+    These aborted the ruleset of each guest using the group and left the
+    guest without any filtering. Such guests now get their other rules
+    and default policy applied again, which can block traffic that passed
+    so far:
+    - skip only the affected rule if a rule of a group cannot be
+      generated.
+    - reject references to groups with names longer than 18 characters,
+      which cannot exist since the names of their chains would be too
+      long.
+    - skip only the affected reference if a group cannot be generated for
+      another reason.
+
+  * cluster options: reject log rate limits that iptables cannot apply,
+    that is more than 10000 messages per second, a burst above 10000, or
+    a burst lasting longer than about 37 hours, for example one message
+    per day with the default burst of 5. As every logging rule uses this
+    limit, such a value kept the whole ruleset from being applied or was
+    applied with a wrong burst. Configurations that already contain one
+    fall back to the default limit.
+
+  * host options: limit the rate and burst of the SYN flood protection to
+    1000000, the most iptables accepts. Larger values kept the whole
+    ruleset from being applied. Configurations that already contain them
+    now use the defaults, as do SYN_RECV timeouts above 2147483 seconds,
+    the most the kernel accepts.
+
+  * host options: apply the configured conntrack SYN_RECV timeout to the
+    kernel. Due to a typo, only the SYN flood protection used it, while
+    the kernel kept its previous timeout.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Nov 2026 06:14:19 +0100
+
+pve-firewall (6.0.7) trixie; urgency=medium
+
+  * rules: reject an interface on rules with direction forward, which do
+    not support it. The API accepted such rules before, making it easy to
+    create invalid forward rules by accident.
+
+  * api: vnets: check permissions with the shared SDN helper. A VNet that
+    does not exist and one the user lacks privileges for now return the
+    same error, consistent with the other SDN API endpoints.
+
+  * api: aliases: make the CIDR optional when updating an alias and keep
+    its comment unless a new one is passed. Clients can now rename an
+    alias or change its comment without sending back the current CIDR.
+
+  * ipfilter: fix several issues with the ARP filter, which limits the
+    sender addresses a guest can use in ARP packets:
+    - resolve aliases in ipfilter-netX sets instead of failing. An alias
+      or otherwise invalid entry aborted the generation of all ebtables
+      rules for the guest, including its MAC address filter. Entries
+      that cannot be resolved are now skipped and logged together with
+      the affected guest.
+    - honor nomatch ("!") entries in ipfilter-netX sets. Excluded
+      addresses were still accepted as ARP source, although the IP set
+      already blocked their IP traffic. Overlapping and duplicate entries
+      now follow the same precedence as in the IP set.
+    - ignore the 'manual' IPv4 setting of containers, like 'dhcp'. It was
+      passed to ebtables as an address, which made ebtables reject the
+      whole ruleset, so the rules could not be updated for any guest.
+    - allow the configured IPv4 address of a container whenever the IP
+      filter applies, also if only an ipfilter-netX set is defined
+      without the ipfilter option. ARP from the container's own address
+      was dropped in that case, although the IP set allowed its traffic.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Nov 2026 00:19:22 +0100
+
+pve-firewall (6.0.6) trixie; urgency=medium
+
+  * rules: read protocols, services and ethertypes from the new
+    proxmox-firewall-data package instead of the host's netbase files,
+    and pass protocols to iptables by number. A netbase update that
+    drops a name can no longer invalidate existing rules.
+
+  * fix #7584: rules: resolve port aliases in the firewall daemon and
+    use the numeric port independently of the rule's protocol. iptables
+    rejected aliases that are only defined for another protocol, for
+    example bootps on TCP. This also fixes #6318.
+
+  * fix #6992: rules: validate source and destination addresses against
+    the syntax that iptables accepts. Net::IP allowed expressions such
+    as 192.0.2.0/24:1, which passed the API but then kept the whole
+    ruleset from being applied.
+
+  * api: reject addresses and ports with a trailing line break.
+
+  * config: validate CIDR prefixes when reading aliases and IPSet
+    entries from disk, not only in the API, so an invalid prefix cannot
+    block ruleset updates.
+
+  * fix #5535: ipset: resolve aliases when adding entries and when
+    generating commands, so an alias for 0.0.0.0/0 no longer produces
+    an invalid ipset.
+
+  * rules: log and skip only the affected rule or guest interface if an
+    interface name exceeds the 15 byte limit that iptables enforces,
+    instead of failing to apply the whole ruleset.
+
+  * config: warn about and skip rules with an invalid type when writing
+    the configuration. Two such rules previously made the configuration
+    unfixable through the API and web interface.
+
+  * apply: include the full diagnostic output in the system log when
+    restoring a ruleset fails, instead of only its last line.
+
+  * compile: log errors from every compile step to the system log, not
+    only those for VMs.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 10 Sep 2026 19:50:42 +0200
+
+pve-firewall (6.0.5) trixie; urgency=medium
+
+  * api schema: add missing descriptions
+
+  * simulator: ignore CONNMARK --set-mark targets to fix broken tests
+
+  * buildsys: use cleanup-docgen target from pve-doc-generator
+
+  * fix #7818: disallow line feeds in firewall comments
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Jul 2026 10:52:37 +0200
+
+pve-firewall (6.0.4) trixie; urgency=medium
+
+  * config: document default-value for enable option in cluster and host
+    schema.
+
+  * api: rules: add return type to API schema of list-rules endpoint.
+
+  * config: document that NDP is actually enabled by default for nodes and
+    guests.
+
+  * api: rules: add descriptions to fields in rule return type in schema.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 11 Nov 2025 12:16:10 +0100
+
+pve-firewall (6.0.3) trixie; urgency=medium
+
+  * add connmark rule with VMID to all guest chains.
+
+  * helpers: add sub for flushing conntrack entries by mark.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 30 Jul 2025 22:52:00 +0200
+
+pve-firewall (6.0.2) trixie; urgency=medium
+
+  * firewall: add transparent support for interface alternative names
+    (altnames).
+
+  * change /var/run to /run and /var/lock to /run/lock, they point to the same
+    underlying directory, but /run is the modern one while /var/ continas
+    symlinks to /run. No semantic change intended.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Jul 2025 17:52:36 +0200
+
+pve-firewall (6.0.1) trixie; urgency=medium
+
+  * helpers: add helper for checking firewall bridge creation
+
+  * compile: report rule errors to syslog if running as daemon
+
+  * firewall: adjust to new qemu-server module structure
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Jul 2025 14:38:00 +0200
+
+pve-firewall (6.0.0) trixie; urgency=medium
+
+  * re-build for Debian 13 Trixie based Proxmox releases.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Jun 2025 21:51:13 +0200
+
+pve-firewall (5.1.1) bookworm; urgency=medium
+
+  * fix #5925: vnet: add parsing logic for log_level_forward
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Apr 2025 21:32:26 +0200
+
+pve-firewall (5.1.0) bookworm; urgency=medium
+
+  * nftables: make is_nftables check flag file instead of config
+
+  * add support for loading sdn firewall configuration and use that to support
+    parsing rules referencing IPSets in the new SDN scope and generating those
+    IPSets in the firewall.
+
+  * api ipsets: include sets from the SDN scope
+
+  * api: add base endpoints for vnet-level firewall configuration
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 Nov 2024 16:38:06 +0100
+
+pve-firewall (5.0.7) bookworm; urgency=medium
+
+  * also signal force-disable nftables if FW is completely disabled
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 30 Apr 2024 10:30:16 +0200
+
+pve-firewall (5.0.6) bookworm; urgency=medium
+
+  * add flag to signal the new nftables-based proxmox-firewall that it's
+    disabled without the need to parse the config
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 26 Apr 2024 17:19:50 +0200
+
+pve-firewall (5.0.5) bookworm; urgency=medium
+
+  * simulator: adapt to more flexible bridge naming scheme
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 23 Apr 2024 13:11:43 +0200
+
+pve-firewall (5.0.4) bookworm; urgency=medium
+
+  * fix #5335: stable sorting in cluster.fw
+
+  * add configuration option for new nftables firewall tech-preview
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Apr 2024 20:04:09 +0200
+
+pve-firewall (5.0.3) bookworm; urgency=medium
+
+  * fix resolution of scoped aliases in ipsets
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 17 Jul 2023 10:39:28 +0200
+
+pve-firewall (5.0.2) bookworm; urgency=medium
+
+  * fix #4556: api: return scoped IPSets and aliases
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 21 Jun 2023 19:17:19 +0200
+
+pve-firewall (5.0.1) bookworm; urgency=medium
+
+  * fix #4556: support 'dc/' and 'guest/' prefix for aliases and ipsets
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Jun 2023 16:06:10 +0200
+
+pve-firewall (5.0.0) bookworm; urgency=medium
+
+  * switch to native versioning scheme
+
+  * build for Proxmox VE 8 / Debian 12 Bookworm
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 May 2023 14:43:58 +0200
+
+pve-firewall (4.3-2) bullseye; urgency=medium
+
+  * fix variables declared in conditional statement
+
+  * fix #4730: add safeguards to prevent ICMP type misuse
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 16 May 2023 11:17:58 +0200
+
+pve-firewall (4.3-1) bullseye; urgency=medium
+
+  * allow entering IP address with the host bits (those inside the mask) not
+    being all zero non-zero, like 192.168.1.155/24 for example.
+
+  * api: firewall logger: add optional parameters `since` and `until` for
+    time-range filtering
+
+  * fix #4550: host options: add nf_conntrack_helpers to compensate that
+    kernel 6.1 and newer have removed the auto helpers
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 17 Mar 2023 15:24:56 +0100
+
+pve-firewall (4.2-7) bullseye; urgency=medium
+
+  * fix #4018: add firewall macro for SPICE proxy
+
+  * fix #4204: automatically update each usage of a group to the new ID when
+    it is renamed
+
+  * fix #4268: add 'force' parameter to delete IPSet with members
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Nov 2022 19:53:04 +0100
+
+pve-firewall (4.2-6) bullseye; urgency=medium
+
+  * config defaults: document that the mac filter defaults to on
+
+  * fix #4175: ignore non-filter ebtables tables
+
+  * fix enabling ebtables if VM firewall config is invalid
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 29 Aug 2022 09:43:53 +0200
+
+pve-firewall (4.2-5) bullseye; urgency=medium
+
+  * fix #3677 ipset get chains: handle newer ipset output for actual
+    change detection
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 04 Nov 2021 16:37:13 +0100
+
+pve-firewall (4.2-4) bullseye; urgency=medium
+
+  * re-build to avoid issues stemming from semi-broken systemd-debhelper version
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 12 Oct 2021 10:39:05 +0200
+
+pve-firewall (4.2-3) bullseye; urgency=medium
+
+  * fix #2721: remove the (nowadays) bogus reject for TCP port 43 from the
+    default drop and reject actions
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 10 Sep 2021 13:00:07 +0200
+
+pve-firewall (4.2-2) bullseye; urgency=medium
+
+  * re-set relevant sysctls on every apply round
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Jun 2021 11:31:42 +0200
+
+pve-firewall (4.2-1) bullseye; urgency=medium
+
+  * fix #967: source: dest: limit length
+
+  * re-build for Debian 11 Bullseye based releases (Proxmox VE 7)
+
+  * fix #2358: allow --<opt> in firewall rule config files
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 12 May 2021 20:32:30 +0200
+
+pve-firewall (4.1-3) pve; urgency=medium
+
+  * fix #2773: ebtables: keep policy of custom chains
+
+  * introduce new icmp-type parameter
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Sep 2020 16:51:27 +0200
+
+pve-firewall (4.1-2) pve; urgency=medium
+
+  * revert: rules: verify referenced security group exists
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 May 2020 17:41:36 +0200
+
+pve-firewall (4.1-1) pve; urgency=medium
+
+  * logging: add missing log message for inbound rules
+
+  * fix #2686: avoid adding 'arp-ip-src' IP filter if guests uses DHCP
+
+  * IPSets: parse the CIDR before checking for duplicates
+
+  * verify that a referenced security group exists
+
+  * ICMP: fix iptables-restore failing if ICMP-type values bigger than '255'
+
+  * ICMP: allow one to specify the 'echo-reply' (0) type also as integer
+
+  * improve handling concurrent (parallel) access and modifications to rules
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 04 May 2020 15:01:57 +0200
+
+pve-firewall (4.0-10) pve; urgency=medium
+
+  * macros: add macro for Proxmox Mail Gateway web interface
+
+  * api node: always pass cluster conf to node FW parser to fix false positive
+    error message about non existing aliases, or IP sets, when querying the
+    node FW options GET API call.
+
+  * grammar fix: s/does not exists/does not exist/g
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 27 Jan 2020 19:25:49 +0100
+
+pve-firewall (4.0-9) pve; urgency=medium
+
+  * ensure port range used for offline storage migration and insecure migration
+    traffic is allowed by default rule set.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Dec 2019 08:12:20 +0100
+
+pve-firewall (4.0-8) pve; urgency=medium
+
+  * increase default nf_conntrack_max to the kernel's default
+
+  * fix some "use of uninitialized value" warnings when updating CIDRs
+
+  * update schema documentation
+
+  * add explicit dependency on libpve-cluster-perl
+
+  * add support for "raw" tables
+
+  * add options for synflood protection for host firewall:
+    - nf_conntrack_tcp_timeout_syn_recv
+    - protection_synflood: boolean
+    - protection_synflood_rate: SYN rate limit (default 200 per second)
+    - protection_synflood_burst: SYN burst limit (default 1000)
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Nov 2019 13:48:20 +0100
+
+pve-firewall (4.0-7) pve; urgency=medium
+
+  * only add VM chains and rules if VM firewall is enabled
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 7 Aug 2019 10:55:06 +0200
+
+pve-firewall (4.0-6) pve; urgency=medium
+
+  * firewall macros: add new Ceph protocol v2 port while keeping v1 port
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 23 Jul 2019 18:57:48 +0200
+
+pve-firewall (4.0-5) pve; urgency=medium
+
+  * don't use any base path at all for calls to external binaries to make use
+    compativle with bot, /usr merged and unmerged setups
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 12 Jul 2019 11:47:53 +0200
+
+pve-firewall (4.0-4) pve; urgency=medium
+
+  * ebtables: remove PVE chains properly
+
+  * ebtables: treat chain deletion as change
+
+  * use /usr/sbin as base path
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Jul 2019 19:40:01 +0200
+
+pve-firewall (4.0-3) pve; urgency=medium
+
+  * Create corosync firewall rules independently of localnet~
+
+  * Display corosync rule info on localnet call
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 04 Jul 2019 15:56:11 +0200
+
+pve-firewall (4.0-2) pve; urgency=medium
+
+  * fix systemd warning about PIDFile directory
+
+  * fix CT rule generation with ipfilter set
+
+  * pve-firewall service: update-alternative iptables and ebtables to working
+    legacy versions
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Jun 2019 20:43:21 +0200
+
+pve-firewall (4.0-1) pve; urgency=medium
+
+  * re-build for Debian Buster / PVE 6
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 May 2019 22:28:55 +0200
+
+pve-firewall (3.0-21) unstable; urgency=medium
+
+  * fix ipv6 PVEFW-reject
+
+  * fix #2193: arpfilter: CT: remove mask from net IP/CIDR to avoid
+    ebtables doing the wrong thing here
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 08 May 2019 10:09:31 +0000
+
+pve-firewall (3.0-20) unstable; urgency=medium
+
+  * use IPCC to read config and rule files, if the are backed by pmxcfs which
+    has better handling for pmxcfs restarts
+
+  * fix #2178: endless loop on ipv6 extension headers
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Apr 2019 05:10:13 +0000
+
+pve-firewall (3.0-19) unstable; urgency=medium
+
+  * ebtables: add arp filtering
+
+  * fix: #2123 Logging of user defined firewall rules
+
+  * fix Razor macro
+
+  * allow to enable/disable and modify cluster wide log ratelimits
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 02 Apr 2019 11:15:16 +0200
+
+pve-firewall (3.0-18) unstable; urgency=medium
+
+  * fix #1606: Add nf_conntrack_allow_invalid option
+
+  * log reject : add space after policy REJECT like drop
+
+  * fix #1891: Add zsh command completion for pve-firewall
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 04 Mar 2019 10:27:01 +0100
+
+pve-firewall (3.0-17) unstable; urgency=medium
+
+  * fix #2005: only allow ascii port digits
+
+  * fix #2004: do not allow backwards ranges
+
+  * add conntrack logging via libnetfilter_conntrack and allow one to enable
+    it through the firewall host configuration
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Jan 2019 16:56:17 +0100
+
+pve-firewall (3.0-16) unstable; urgency=medium
+
+  * api/rules: fix macro return type
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 30 Nov 2018 16:02:59 +0100
+
+pve-firewall (3.0-15) unstable; urgency=medium
+
+  * fix #1971: display firewall rule properties
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 23 Nov 2018 14:01:33 +0100
+
+pve-firewall (3.0-14) unstable; urgency=medium
+
+  * fix #1841: avoid ebtable reloads when containers have multiple network
+    interfaces
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 24 Aug 2018 10:51:04 +0200
+
+pve-firewall (3.0-13) unstable; urgency=medium
+
+  * avoid unnecessary reloads of ebtable ruleset
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 28 Jun 2018 14:47:16 +0200
+
+pve-firewall (3.0-12) unstable; urgency=medium
+
+  * fix deleted iptables chains not being properly detected as a change
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 12 Jun 2018 12:01:02 +0200
+
+pve-firewall (3.0-11) unstable; urgency=medium
+
+  * #1764: rename 'ebtales_enable' option to 'ebtables'
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 Jun 2018 16:18:13 +0200
+
+pve-firewall (3.0-10) unstable; urgency=medium
+
+  * fix #1764: handle existing ebtables rules and allow disabling ebtables
+
+  * ebtables handling can be disabled via /etc/pve/firewall/cluster.fw's new
+    ebtables_enable option.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 May 2018 15:14:33 +0200
+
+pve-firewall (3.0-9) unstable; urgency=medium
+
+  * fix creation of ebltables FORWARD rule entry
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 May 2018 14:41:27 +0200
+
+pve-firewall (3.0-8) unstable; urgency=medium
+
+  * add ebtables support for better MAC filtering
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 11 Apr 2018 14:25:41 +0200
+
+pve-firewall (3.0-7) unstable; urgency=medium
+
+  * support distinct source and destination multi-port matching
+
+  * multi-port matching: when specifying the same list of ports for source and
+    destination require them both to match, rather than one of them, as this
+    was rather unexpected behavior
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 12 Mar 2018 14:58:08 +0100
+
+pve-firewall (3.0-6) unstable; urgency=medium
+
+  * fix #1319: don't fail postinst with masked service
+
+  * debian: switch to compat 9, drop init scripts, drop preinst
+
+  * check multiport limit in port ranges
+
+  * build: use git rev-parse for GITVERSION
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 08 Mar 2018 13:53:11 +0100
+
+pve-firewall (3.0-5) unstable; urgency=medium
+
+  * fix issue with disabled flag not being honored within groups
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 07 Dec 2017 08:31:42 +0100
+
+pve-firewall (3.0-4) unstable; urgency=medium
+
+  * fix issues with ipsets reloading unnecessarily or too late
+
+  * fix some typos in the logs
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Nov 2017 11:41:56 +0100
+
+pve-firewall (3.0-3) unstable; urgency=medium
+
+  * Fix #1492: logger: use current timestamp if the packet doesn't have one
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 12 Sep 2017 14:43:06 +0200
+
+pve-firewall (3.0-2) unstable; urgency=medium
+
+  * Fix #1446: remove masks in case the package had previously been removed but
+    not purged.
+
+  * improve logging on errors in the firewall configuration
+
+  * forbid trailing commas in lists as iptables-restore doesn't support them
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 17 Jul 2017 15:24:40 +0200
+
+pve-firewall (3.0-1) unstable; urgency=medium
+
+  * rebuild for Debian Stretch
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 9 Mar 2017 14:04:17 +0100
+
+pve-firewall (2.0-33) unstable; urgency=medium
+
+  * ipset: don't allow zero-prefix entries
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Nov 2016 12:18:04 +0100
+
+pve-firewall (2.0-32) unstable; urgency=medium
+
+  * improve search for local-network
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Nov 2016 06:35:08 +0100
+
+pve-firewall (2.0-31) unstable; urgency=medium
+
+  * don't try to apply ports to rules which don't support them
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 06 Oct 2016 08:31:51 +0200
+
+pve-firewall (2.0-30) unstable; urgency=medium
+
+  * add multicast DNS to the list of Macros
+
+  * add missing parameter descriptions
+
+  * build-depends: add dh-systemd
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Sep 2016 08:53:16 +0200
+
+pve-firewall (2.0-29) unstable; urgency=medium
+
+  * prevent overwriting ipsets/sec. groups by renaming
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 03 Jun 2016 16:46:10 +0200
+
+pve-firewall (2.0-28) unstable; urgency=medium
+
+  * use pve-common's ipv4_mask_hash_localnet
+
+  * fix allowed group name length
+
+  * make group digest stable
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 03 Jun 2016 11:01:47 +0200
+
+pve-firewall (2.0-27) unstable; urgency=medium
+
+  * fix #972: make PVEFW-FWBR-* rule order stable
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 May 2016 07:59:52 +0200
+
+pve-firewall (2.0-26) unstable; urgency=medium
+
+  * fix #988: set rp_filter=2
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 May 2016 10:01:28 +0200
+
+pve-firewall (2.0-25) unstable; urgency=medium
+
+  * fix #945: add uninitialized check in lxc ipset compilation
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 21 Apr 2016 09:58:33 +0200
+
+pve-firewall (2.0-24) unstable; urgency=medium
+
+  * Build-Depend on pve-doc-generator
+
+  * generate manpage with pve-doc-generator
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 Apr 2016 10:52:45 +0200
+
+pve-firewall (2.0-23) unstable; urgency=medium
+
+  * use only the top bit for our accept marks
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 01 Apr 2016 07:35:38 +0200
+
+pve-firewall (2.0-22) unstable; urgency=medium
+
+  * Use cfs_config_path from PVE::QemuConfig
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Mar 2016 11:47:40 +0100
+
+pve-firewall (2.0-21) unstable; urgency=medium
+
+  * added new 'ipfilter' option
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Mar 2016 09:43:39 +0100
+
+pve-firewall (2.0-20) unstable; urgency=medium
+
+  * fix 901: encode unicode characters in sha digest
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 29 Feb 2016 12:40:14 +0100
+
+pve-firewall (2.0-19) unstable; urgency=medium
+
+  * Add radv option to VM options
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 27 Feb 2016 10:24:42 +0100
+
+pve-firewall (2.0-18) unstable; urgency=medium
+
+  * Add ndp option to host and VM firewall options
+
+  * Add router-solicitation to NeighborDiscovery macro
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Feb 2016 10:01:22 +0100
+
+pve-firewall (2.0-17) unstable; urgency=medium
+
+  * Don't leave empty FW config files behind
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 08 Feb 2016 14:09:24 +0100
+
+pve-firewall (2.0-16) unstable; urgency=medium
+
+  * logger: basic ipv6 support
+
+  * add DHCPv6 macro
+
+  * add dhcpv6 support to the dhcp option
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 26 Jan 2016 16:52:14 +0100
+
+pve-firewall (2.0-15) unstable; urgency=medium
+
+  * fix bug #859: use $security_group_name_pattern in iptables_get_chains
+
+  * fix some regular expressions mixups
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 07 Jan 2016 16:33:23 +0100
+
+pve-firewall (2.0-14) unstable; urgency=medium
+
+  * fix systemd service dependencies
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 27 Nov 2015 10:52:57 +0100
+
+pve-firewall (2.0-13) unstable; urgency=medium
+
+  * allow numeric icmp types
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 23 Oct 2015 13:21:53 +0200
+
+pve-firewall (2.0-12) unstable; urgency=medium
+
+  * implement bash completions
+
+  * convert pve-firewall into a PVE::Service class
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 24 Sep 2015 12:15:00 +0200
+
+pve-firewall (2.0-11) unstable; urgency=medium
+
+  * iptables_get_chains: fix veth device name
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Sep 2015 07:54:35 +0200
+
+pve-firewall (2.0-10) unstable; urgency=medium
+
+  * new helper: clone_vmfw_conf() 
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 25 Aug 2015 06:47:49 +0200
+
+pve-firewall (2.0-9) unstable; urgency=medium
+
+  * remove firewall config file subroutine added
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 19 Aug 2015 15:42:51 +0200
+
+pve-firewall (2.0-8) unstable; urgency=medium
+
+  * adopt regresion tests for lxc containers
+
+  * removed firewall code for openVZ
+
+  *  Subroutine verify_rule fixed to correctly check only for "net\d+"
+  interface device names
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 12 Aug 2015 12:01:43 +0200
+
+pve-firewall (2.0-7) unstable; urgency=medium
+
+  * added firewall code for lxc
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 Aug 2015 09:21:14 +0200
+
+pve-firewall (2.0-6) unstable; urgency=medium
+
+  * firewall ipversion comparison fix
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 04 Aug 2015 11:14:51 +0200
+
+pve-firewall (2.0-5) unstable; urgency=medium
+
+  * add ipv6 neighbor discovery and solicitation macros
+
+  * ip6tables accepts both spellings of the word neighbor
+
+  * added Ceph macro
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 27 Jul 2015 13:20:55 +0200
+
+pve-firewall (2.0-4) unstable; urgency=medium
+
+  * include manual page for pve-firewall
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 27 Jun 2015 16:26:28 +0200
+
+pve-firewall (2.0-3) unstable; urgency=medium
+
+  * use noawait trigers for pve-api-updates
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 01 Jun 2015 12:33:06 +0200
+
+pve-firewall (2.0-2) unstable; urgency=medium
+
+  * trigger pve-api-updates event
+  
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 05 May 2015 15:10:24 +0200
+
+pve-firewall (2.0-1) unstable; urgency=medium
+
+  * recompile for debian jessie
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 27 Feb 2015 12:22:04 +0100
+
+pve-firewall (1.0-18) unstable; urgency=low
+
+  * fix alias lookup
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Feb 2015 09:32:03 +0100
+
+pve-firewall (1.0-17) unstable; urgency=low
+
+  * fix restart behavior 
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 15 Jan 2015 06:45:58 +0100
+
+pve-firewall (1.0-16) unstable; urgency=low
+
+  * use new Daemon class from pve-common
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 18 Dec 2014 09:45:07 +0100
+
+pve-firewall (1.0-15) unstable; urgency=low
+
+  * bug fix: load cluster conf for host rules
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 12 Dec 2014 06:33:28 +0100
+
+pve-firewall (1.0-14) unstable; urgency=low
+
+  *  do not use ipset list chains
+  
+  *  remove preinst script (not needed anymore) 
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 05 Dec 2014 13:42:00 +0100
+
+pve-firewall (1.0-13) unstable; urgency=low
+
+  * fix ipset remove order
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Nov 2014 12:45:48 +0100
+
+pve-firewall (1.0-12) unstable; urgency=low
+
+  * add preinst script to clear ipset from older installation (because 
+    sets cannot be swapped if there type does not match.
+  
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Nov 2014 08:59:38 +0100
+
+pve-firewall (1.0-11) unstable; urgency=low
+
+  * bug fix: correctly set ipversion for aliases in verify_rule
+  
+  * save restore commands into files to make debugging 
+    easier (/var/lib/pve-firewall/)
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Nov 2014 08:04:05 +0100
+
+pve-firewall (1.0-10) unstable; urgency=low
+
+  * add IPv6 support for VMs (hostfw is IPv4 only)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 26 Nov 2014 07:00:29 +0100
+
+pve-firewall (1.0-9) unstable; urgency=low
+
+  * fix max ipset name name length
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 14 Oct 2014 16:29:34 +0200
+
+pve-firewall (1.0-8) unstable; urgency=low
+
+  * implement permission
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 08 Sep 2014 12:15:21 +0200
+
+pve-firewall (1.0-7) unstable; urgency=low
+
+  * proxy host rule API calls to correct node
+  
+  * always generate MAC and IP filter rules if firewall is enabled on NIC
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 26 Jun 2014 07:12:57 +0200
+
+pve-firewall (1.0-6) unstable; urgency=low
+
+  * ipmlement ipfilter ipsets
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 12 Jun 2014 08:37:08 +0200
+
+pve-firewall (1.0-5) unstable; urgency=low
+
+  * remove ipsets when firewall disabled
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 04 Jun 2014 08:50:18 +0200
+
+pve-firewall (1.0-4) unstable; urgency=low
+
+  * depend on iptables and ipset
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 04 Jun 2014 06:45:33 +0200
+
+pve-firewall (1.0-3) unstable; urgency=low
+
+  * change dh_installinit order (register pvefw-logger before pve-firewall)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 04 Jun 2014 06:24:21 +0200
+
+pve-firewall (1.0-2) unstable; urgency=low
+
+  * add experimental nflog logging daemon
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 13 Mar 2014 08:27:01 +0100
+
+pve-firewall (1.0-1) unstable; urgency=low
+
+  * initial package
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 03 Mar 2014 08:37:06 +0100
+

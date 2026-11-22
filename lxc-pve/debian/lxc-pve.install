@@ -1,0 +1,14 @@
+debian/apparmor-abi/lxc /etc/apparmor.d/abi/
+debian/config/* /usr/share/lxc/config/
+etc
+usr/lib/systemd
+usr/bin
+usr/lib/*/*.so.*
+usr/lib/*/lxc/rootfs/README
+usr/libexec/lxc/hooks/*
+usr/libexec/lxc/lxc-*
+usr/sbin
+usr/share/bash-completion/completions
+usr/share/lxc
+usr/share/lxc/hooks/*
+usr/share/man

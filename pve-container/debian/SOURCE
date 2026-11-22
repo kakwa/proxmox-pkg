@@ -1,0 +1,2 @@
+git clone git://git.proxmox.com/git/pve-container.git
+git checkout 50578a3aec974b8c3e8c788c0e537f190f4ce383

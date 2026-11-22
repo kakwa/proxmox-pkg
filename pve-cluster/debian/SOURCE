@@ -1,0 +1,2 @@
+git clone git://git.proxmox.com/git/pve-cluster.git
+git checkout cb53d5a5a8940d9725ae6fe80fb3852882ea4f49

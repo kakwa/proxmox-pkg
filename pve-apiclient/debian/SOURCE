@@ -1,0 +1,2 @@
+git clone git://git.proxmox.com/git/pve-apiclient.git
+git checkout c202fe1b9dcdd68b7f1701118d1294f8db69c010

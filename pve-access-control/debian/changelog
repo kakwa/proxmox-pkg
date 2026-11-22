@@ -1,0 +1,1371 @@
+libpve-access-control (9.2.3) trixie; urgency=medium
+
+  * rpcenv: accept SDN.Allocate instead of Permissions.Modify for modifying
+    the permissions on paths below /sdn, like VM.Allocate for guests. This
+    allows users with SDN.Allocate on a VNet to add it to resource pools. They
+    can also view and change the ACLs on such paths now, but only grant or
+    revoke a subset of their own privileges, as for the other exceptions.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Nov 2026 05:43:49 +0100
+
+libpve-access-control (9.2.2) trixie; urgency=medium
+
+  * api: realms: only return the client key of OpenID realms and the API key
+    of a realm's Yubico two-factor config to users with 'Realm.Allocate'.
+    Reading a realm config only requires 'Sys.Audit', which the PVEAuditor
+    role grants as well.
+
+  * fix #7805: api: tokens: enforce the new datacenter token policy on token
+    creation and update. Only changed settings get checked, so tokens that
+    predate the policy stay valid and unrelated edits keep working. With
+    'default-to-max-lifetime', tokens created without an expiration date, for
+    example by the remote wizard of Proxmox Datacenter Manager, get the
+    maximum lifetime instead of being rejected. With
+    'allow-extension-on-regenerate', an update that regenerates the secret
+    may also extend the expiration date despite 'disallow-expiry-extension'.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Nov 2026 02:08:07 +0100
+
+libpve-access-control (9.2.1) trixie; urgency=medium
+
+  * api: tokens: creating an API token without privilege separation for
+    another user, regenerating the secret of another user's token, or any
+    update that leaves another user's token without privilege separation now
+    requires 'Realm.AllocateUser' on that user's realm and
+    'Permissions.Modify' on '/'. Before, 'User.Modify' on one of the user's
+    groups was enough, which could hand out a token with more privileges than
+    the caller had. API tokens never count as their owning user here.
+
+  * auth: drop support for the legacy TFA ticket format, replaced since
+    Proxmox VE 7. Its 'tfa!' prefix is also valid at the start of a user name,
+    so a full ticket of such a user could be mistaken for a half-authenticated
+    ticket of another user. Also let users whose name starts with '!tfa!' use
+    their tickets, which got mistaken for a pending TFA challenge.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 13 Nov 2026 22:16:42 +0100
+
+libpve-access-control (9.2.0) trixie; urgency=medium
+
+  * auth: tfa: fail closed if the TFA configuration cannot be loaded, instead
+    of accepting an unverified second factor or ignoring a realm's TFA
+    requirement.
+
+  * auth: ldap, ad: reject empty passwords. Directory servers allowing
+    anonymous binds accept a bind with an empty password, which let anyone
+    knowing a valid user name pass the password check.
+
+  * auth: pam, pve: hash new passwords with yescrypt, the Debian default,
+    instead of SHA-256 crypt, whose default cost is too low for modern
+    hardware. PVE realm passwords stored with an older hash get upgraded on
+    login, as long as the cluster is quorate.
+
+  * fix #7513: permissions: allow ACLs on '/nodes/<node>/certificates', so
+    that certificate management can be delegated without granting privileges
+    on the whole node.
+
+  * fix #7520: sdn: support dropping the ACLs of deleted SDN resources and
+    moving VNet ACLs along when a VNet moves to another zone. This prevents
+    stale permissions from applying to a resource that gets re-created with
+    the same name.
+
+  * fix #7294: pools: allow SDN VNets as pool members, either the VNet itself,
+    a specific VLAN tag, or the VNet including all its tags. This allows
+    granting access to networks through pool permissions, like for guests and
+    storages. Also provide helpers to drop or update such members when their
+    VNet gets deleted or moves to another zone.
+
+  * acl: fix ACLs on paths with a '0' segment, like '/sdn/fabrics/0', being
+    applied to the parent path instead, which with propagation also covers
+    all its other children. ACLs that got already written back with the
+    parent path stay there and should be checked.
+
+  * user config: keep groups, roles and pools named '0', which got dropped on
+    the next write of the user config, along with their members and ACLs.
+    Also handle such groups in the user and ACL API, and when syncing them
+    from LDAP, AD or OpenID Connect realms.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 02 Nov 2026 23:30:49 +0100
+
+libpve-access-control (9.1.2) trixie; urgency=medium
+
+  * improve newline handling in various regular expressions
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Sep 2026 09:29:36 +0200
+
+libpve-access-control (9.1.1) trixie; urgency=medium
+
+  * fix #5076: auth: open id: add an optional "audiences" field to realm config
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 May 2026 16:30:05 +0200
+
+libpve-access-control (9.1.0) trixie; urgency=medium
+
+  * permissions: add ACL paths for SDN prefix-lists and route-maps, to allow
+    granular access control for the new routing-related SDN objects.
+
+  * ldap sync: fix double-encoding of non-ASCII characters in synced attribute
+    values like first name, last name, email and comment, which previously got
+    garbled in the GUI and CLI.
+
+  * api: token: support regenerating the secret on update, allowing in-place
+    rotation of leaked or compromised tokens without dropping the associated
+    ACL entries that referenced the old token id.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 May 2026 02:05:21 +0200
+
+libpve-access-control (9.0.7) trixie; urgency=medium
+
+  * vncticket: complete privileges check on path, while this did not matter in
+    practice on current use sites we still want to hedge against that
+    changing on some new use site in the future.
+
+  * short lived ticket: support specifying additional secret.
+
+  * spice and vnc ticket: allow encoding and verifying port for hardening and
+    as a defense-in-depth measure.
+
+  * vnc ticket: allow tickets with a password prefix for backward
+    compatibility as alternative to the newer explicit 'password' return
+    property.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Apr 2026 21:43:59 +0200
+
+libpve-access-control (9.0.6) trixie; urgency=medium
+
+  * pam: fork for PAM authentication to isolate SIGCHLD handler to avoid
+    side-effects causing SIGCHLDs from RESTEnvironment (task) worker processes
+    to be lost.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 01 Apr 2026 01:23:19 +0200
+
+libpve-access-control (9.0.5) trixie; urgency=medium
+
+  * fix #7102: fix group name validation.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 05 Dec 2025 17:06:20 +0100
+
+libpve-access-control (9.0.4) trixie; urgency=medium
+
+  * api: ticket: allow token-owned VNC ticket verification
+
+  * api: token: fix #6890: add ability to remove comment with empty string
+
+  * api: token: add delete parameter for comment
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Nov 2025 10:54:07 +0100
+
+libpve-access-control (9.0.3) trixie; urgency=medium
+
+  * readme: update privileges
+
+  * add VM.Replicate privilege
+
+  * fix #6528: tfa: update user config on removal of TFA
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 30 Jul 2025 15:14:08 +0200
+
+libpve-access-control (9.0.2) trixie; urgency=medium
+
+  * privileges: drop VM.Monitor in favor of more granular VM.GuestAgent.*
+    privileges
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Jul 2025 22:05:18 +0200
+
+libpve-access-control (9.0.1) trixie; urgency=medium
+
+  * drop unused old u2f code, it was replaced by the more generic WebAuthn
+    implementation.
+
+  * permissions: add ACL paths for SDN fabrics.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Jul 2025 23:28:51 +0200
+
+libpve-access-control (9.0.0) trixie; urgency=medium
+
+  * re-build for Debian 13 "Trixie" based Proxmox releases.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 02 Jun 2025 19:35:27 +0200
+
+libpve-access-control (8.2.2) bookworm; urgency=medium
+
+  * oidc: fix overly strict groups-claim regex enforced by API schema.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Apr 2025 13:37:07 +0200
+
+libpve-access-control (8.2.1) bookworm; urgency=medium
+
+  * api, auth: fix two typos in user-visible description.
+
+  * fix #4411: OIDC: add logic for openid groups support. Allow admisn to
+    configure a 'groups-claim' to automatically map users to PVE groups and
+    add a 'groups-autocreate' setting to optionally create them automatically
+    if a group does not already exist. Additionally, provide a flag for making
+    OIDC the source of truth for group membership on login. If the flag named
+    'groups-overwrite' is set, the user will be removed from all groups first
+    before being added to the list returned by the identity provider.
+
+  * fix #4234: OIDC: allow one to configure realms to not query the userinfo
+    on login by setting the 'query-userinfo' flag.
+
+  * access: lookup: fix undef warning for case-insensitive realms.
+
+  * access: lookup: avoid reading user.cfg from cfs unnecessarily, it's only
+    required for case-insensitive realms.
+
+  * api: clarify that password changes for PAM realm only apply to local node.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 04 Apr 2025 19:28:32 +0200
+
+libpve-access-control (8.2.0) bookworm; urgency=medium
+
+  * api: ACL update: fix regression where the Permissions.Modify handling
+    became to strict, a user with "Permissions.Modify" on a path should be
+    able to set arbitrary ACLs for that path, even without propagation.
+
+  * pveum: user token: rename 'remove' command to 'delete' for consistency
+    with other delete-commands of this tool. Keep 'remove' as alias for
+    backward compatibility.
+
+  * api: permissions: allow users to view their own permissions.
+
+  * api: permissions: allow users to check their own tokens.
+
+  * api: enforce a minimum length of 8 on new passwords to align with NIST's
+    latest recommendation.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 13 Nov 2024 17:41:50 +0100
+
+libpve-access-control (8.1.4) bookworm; urgency=medium
+
+  * fix #5335: sort ACL entries in user.cfg to make it easier to track changes
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Apr 2024 13:45:22 +0200
+
+libpve-access-control (8.1.3) bookworm; urgency=medium
+
+  * user: password change: require confirmation-password parameter so that
+    anybody gaining local or physical access to a device where a user is
+    logged in on a Proxmox VE web-interface cannot give them more permanent
+    access or deny the actual user accessing their account by changing the
+    password. Note that such an attack scenario means that the attacker
+    already has high privileges and can already control the resource
+    completely through another attack.
+    Such initial attacks (like stealing an unlocked device) are almost always
+    are outside of the control of our projects. Still, hardening the API a bit
+    by requiring a confirmation of the original password is to cheap to
+    implement to not do so.
+
+  * jobs: realm sync: fix scheduled LDAP syncs not applying all attributes,
+    like comments, correctly
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 22 Mar 2024 14:14:36 +0100
+
+libpve-access-control (8.1.2) bookworm; urgency=medium
+
+  * add Sys.AccessNetwork privilege
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 28 Feb 2024 15:42:12 +0100
+
+libpve-access-control (8.1.1) bookworm; urgency=medium
+
+  * LDAP sync: fix-up assembling valid attribute set
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 08 Feb 2024 19:03:26 +0100
+
+libpve-access-control (8.1.0) bookworm; urgency=medium
+
+  * api: user: limit the legacy user-keys option to the depreacated values
+    that could be set in the first limited TFA system, like e.g., 'x!yubico'
+    or base32 encoded secrets.
+
+  * oidc: enforce generic URI regex for the ACR value to align with OIDC
+    specifications and with Proxmox Backup Server, which was recently changed
+    to actually be less strict.
+
+  * LDAP sync: improve validation of synced attributes, closely limit the
+    mapped attributes names and their values to avoid glitches through odd
+    LDIF entries.
+
+  * api: user: limit maximum length for first & last name to 1024 characters,
+    email to 254 characters (the maximum actually useable in practice) and
+    comment properties to 2048 characters. This avoid that a few single users
+    bloat the user.cfg to much by mistake, reducing the total amount of users
+    and ACLs that can be set up. Note that only users with User.Modify and
+    realm syncs (setup by admins) can change these in the first place, so this
+    is mostly to avoid mishaps and just to be sure.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 08 Feb 2024 17:50:59 +0100
+
+libpve-access-control (8.0.7) bookworm; urgency=medium
+
+  * fix #1148: allow up to three levels of pool nesting
+
+  * pools: record parent/subpool information
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Nov 2023 12:24:13 +0100
+
+libpve-access-control (8.0.6) bookworm; urgency=medium
+
+  * perms: fix wrong /pools entry in default set of ACL paths
+
+  * acl: add missing SDN ACL paths to allowed list
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 17 Nov 2023 08:27:11 +0100
+
+libpve-access-control (8.0.5) bookworm; urgency=medium
+
+  * fix an issue where setting ldap passwords would refuse to work unless
+    at least one additional property was changed as well
+
+  * add 'check-connection' parameter to create and update endpoints for ldap
+    based realms
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 11 Aug 2023 13:35:23 +0200
+
+libpve-access-control (8.0.4) bookworm; urgency=medium
+
+  * Lookup of second factors is no longer tied to the 'keys' field in the
+    user.cfg. This fixes an issue where certain LDAP/AD sync job settings
+    could disable user-configured 2nd factors.
+
+  * Existing-but-disabled TFA factors can no longer circumvent realm-mandated
+    TFA.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 20 Jul 2023 10:59:21 +0200
+
+libpve-access-control (8.0.3) bookworm; urgency=medium
+
+  * pveum: list tfa: recovery keys have no descriptions
+
+  * pveum: list tfa: sort by user ID
+
+  * drop assert_new_tfa_config_available for Proxmox VE 8, as the new format
+    is understood since pve-manager 7.0-15, and users must upgrade to Proxmox
+    VE 7.4 before upgrading to Proxmox VE 8 in addition to that.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 21 Jun 2023 19:45:29 +0200
+
+libpve-access-control (8.0.2) bookworm; urgency=medium
+
+  * api: users: sort groups to avoid "flapping" text
+
+  * api: tfa: don't block tokens from viewing and list TFA entries, both are
+    safe to do for anybody with enough permissions to view a user.
+
+  * api: tfa: add missing links for child-routes
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 21 Jun 2023 18:13:54 +0200
+
+libpve-access-control (8.0.1) bookworm; urgency=medium
+
+  * tfa: cope with native versions in cluster version check
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 09 Jun 2023 16:12:01 +0200
+
+libpve-access-control (8.0.0) bookworm; urgency=medium
+
+  * api: roles: forbid creating new roles starting with "PVE" namespace
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 09 Jun 2023 10:14:28 +0200
+
+libpve-access-control (8.0.0~3) bookworm; urgency=medium
+
+  * rpcenv: api permission heuristic: query Sys.Modify for root ACL-path
+
+  * access control: add /sdn/zones/<zone>/<vnet>/<vlan> ACL object path
+
+  * add helper for checking bridge access
+
+  * add new SDN.Use privilege in PVESDNUser role, allowing one to specify
+    which user are allowed to use a bridge (or vnet, if SDN is installed)
+
+  * add privileges and paths for cluster resource mapping
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Jun 2023 19:06:54 +0200
+
+libpve-access-control (8.0.0~2) bookworm; urgency=medium
+
+  * api: user index: only include existing tfa lock flags
+
+  * add realm-sync plugin for jobs and CRUD api for realm-sync-jobs
+
+  * roles: only include Permissions.Modify in Administrator built-in role.
+    As, depending on the ACL object path, this privilege might allow one to
+    change their own permissions, which was making the distinction between
+    Admin and PVEAdmin irrelevant.
+
+  * acls: restrict less-privileged ACL modifications. Through allocate
+    permissions in pools, storages and virtual guests one can do some ACL
+    modifications without having the Permissions.Modify privilege, lock those
+    better down to ensure that one can only hand out only the subset of their
+    own privileges, never more. Note that this is mostly future proofing, as
+    the ACL object paths one could give out more permissions where already
+    limiting the scope.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Jun 2023 11:34:30 +0200
+
+libpve-access-control (8.0.0~1) bookworm; urgency=medium
+
+  * bump pve-rs dependency to 0.8.3
+
+  * drop old verify_tfa api call (POST /access/tfa)
+
+  * drop support for old login API:
+    - 'new-format' is now considured to be 1 and ignored by the API
+
+  * pam auth: set PAM_RHOST to allow pam configs to log/restrict/... by remote
+    address
+
+  * cli: add 'pveum tfa list'
+
+  * cli: add 'pveum tfa unlock'
+
+  * enable lockout of TFA:
+    - too many TOTP attempts will lock out of TOTP
+    - using a recovery key will unlock TOTP
+    - too many TFA attempts will lock a user's TFA auth for an hour
+
+  * api: add /access/users/<userid>/unlock-tfa to unlock a user's TFA
+    authentication if it was locked by too many wrong 2nd factor login attempts
+
+  * api: /access/tfa and /access/users now include the tfa lockout status
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 05 Jun 2023 14:52:29 +0200
+
+libpve-access-control (7.99.0) bookworm; urgency=medium
+
+  * initial re-build for Proxmox VE 8.x series
+
+  * switch to native versioning
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 21 May 2023 10:34:19 +0200
+
+libpve-access-control (7.4-3) bullseye; urgency=medium
+
+  * use new 2nd factor verification from pve-rs
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 16 May 2023 13:31:28 +0200
+
+libpve-access-control (7.4-2) bullseye; urgency=medium
+
+  * fix #4609: fix regression where a valid DN in the ldap/ad realm config
+    wasn't accepted anymore
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 Mar 2023 15:44:21 +0100
+
+libpve-access-control (7.4-1) bullseye; urgency=medium
+
+  * realm sync: refactor scope/remove-vanished into a standard option
+
+  * ldap: Allow quoted values for DN attribute values
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Mar 2023 17:16:11 +0100
+
+libpve-access-control (7.3-2) bullseye; urgency=medium
+
+  * fix #4518: dramatically improve ACL computation performance
+
+  * userid format: clarify that this is the full name@realm in description
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 06 Mar 2023 11:40:11 +0100
+
+libpve-access-control (7.3-1) bullseye; urgency=medium
+
+  * realm: sync: allow explicit 'none' for 'remove-vanished' option
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Dec 2022 13:11:04 +0100
+
+libpve-access-control (7.2-5) bullseye; urgency=medium
+
+  * api: realm sync: avoid separate log line for "remove-vanished" opt
+
+  * auth ldap/ad: compare group member dn case-insensitively
+
+  * two factor auth: only lock tfa config for recovery keys
+
+  * privs: add Sys.Incoming for guarding cross-cluster data streams like guest
+    migrations and storage migrations
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Nov 2022 13:09:17 +0100
+
+libpve-access-control (7.2-4) bullseye; urgency=medium
+
+  * fix #4074: increase API OpenID code size limit to 2048
+
+  * auth key: protect against rare chance of a double rotation in clusters,
+    leaving the potential that some set of nodes have the earlier key cached,
+    that then got rotated out due to the race, resulting in a possible other
+    set of nodes having the newer key cached. This is a split view of the auth
+    key and may resulting in spurious failures if API requests are made to a
+    different node than the ticket was generated on.
+    In addition to that, the "keep validity of old tickets if signed in the
+    last two hours before rotation" logic was disabled too in such a case,
+    making such tickets invalid too early.
+    Note that both are cases where Proxmox VE was too strict, so while this
+    had no security implications it can be a nuisance, especially for
+    environments that use the API through an automated or scripted way
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 14 Jul 2022 08:36:51 +0200
+
+libpve-access-control (7.2-3) bullseye; urgency=medium
+
+  * api: token: use userid-group as API perm check to avoid being overly
+    strict through a misguided use of user id for non-root users.
+
+  * perm check: forbid undefined/empty ACL path for future proofing of against
+    above issue
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Jun 2022 15:51:14 +0200
+
+libpve-access-control (7.2-2) bullseye; urgency=medium
+
+  * permissions: merge propagation flag for multiple roles on a path that
+    share privilege  in a deterministic way, to avoid that it gets lost
+    depending on perl's random sort, which would result in returing less
+    privileges than an auth-id actually had.
+
+  * permissions: avoid that token and user privilege intersection is to strict
+    for user permissions that have propagation disabled.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 03 Jun 2022 14:02:30 +0200
+
+libpve-access-control (7.2-1) bullseye; urgency=medium
+
+  * user check: fix expiration/enable order
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 31 May 2022 13:43:37 +0200
+
+libpve-access-control (7.1-8) bullseye; urgency=medium
+
+  * fix #3668: realm-sync: replace 'full' & 'purge' with 'remove-
+    vanished'
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 28 Apr 2022 17:02:46 +0200
+
+libpve-access-control (7.1-7) bullseye; urgency=medium
+
+  * userid-group check: distinguish create and update
+
+  * api: get user: declare token schema
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Mar 2022 16:15:23 +0100
+
+libpve-access-control (7.1-6) bullseye; urgency=medium
+
+  * fix #3768: warn on bad u2f or webauthn settings
+
+  * tfa: when modifying others, verify the current user's password
+
+  * tfa list: account for admin permissions
+
+  * fix realm sync permissions
+
+  * fix token permission display bug
+
+  * include SDN permissions in permission tree
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 21 Jan 2022 14:20:42 +0100
+
+libpve-access-control (7.1-5) bullseye; urgency=medium
+
+  * openid: fix username-claim fallback
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 25 Nov 2021 07:57:38 +0100
+
+libpve-access-control (7.1-4) bullseye; urgency=medium
+
+  * set current origin in the webauthn config if no fixed origin was
+    configured, to support webauthn via subdomains
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Nov 2021 14:04:06 +0100
+
+libpve-access-control (7.1-3) bullseye; urgency=medium
+
+  * openid: allow arbitrary username-claims
+
+  * openid: support configuring the prompt, scopes and ACR values
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Nov 2021 08:11:52 +0100
+
+libpve-access-control (7.1-2) bullseye; urgency=medium
+
+  * catch incompatible tfa entries with a nice error
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 17 Nov 2021 13:44:45 +0100
+
+libpve-access-control (7.1-1) bullseye; urgency=medium
+
+  * tfa: map HTTP 404 error in get_tfa_entry correctly
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 15 Nov 2021 15:33:22 +0100
+
+libpve-access-control (7.0-7) bullseye; urgency=medium
+
+  * fix #3513: pass configured proxy to OpenID
+
+  * use rust based parser for TFA config
+
+  * use PBS-like auth api call flow,
+
+  * merge old user.cfg keys to tfa config when adding entries
+
+  * implement version checks for new tfa config writer to ensure all
+    cluster nodes are ready to avoid login issues
+
+  * tickets: add tunnel ticket
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Nov 2021 18:17:49 +0100
+
+libpve-access-control (7.0-6) bullseye; urgency=medium
+
+  * fix regression in user deletion when realm does not enforce TFA
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 21 Oct 2021 12:28:52 +0200
+
+libpve-access-control (7.0-5) bullseye; urgency=medium
+
+  * acl: check path: add /sdn/vnets/* path
+
+  * fix #2302: allow deletion of users when realm enforces TFA
+
+  * api: delete user: disable user first to avoid surprise on error during the
+    various cleanup action required for user deletion (e.g., TFA, ACL, group)
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 27 Sep 2021 15:50:47 +0200
+
+libpve-access-control (7.0-4) bullseye; urgency=medium
+
+  * realm: add OpenID configuration
+
+  * api: implement OpenID related endpoints
+
+  * implement opt-in OpenID autocreate user feature
+
+  * api: user: add 'realm-type' to user list response
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 02 Jul 2021 13:45:46 +0200
+
+libpve-access-control (7.0-3) bullseye; urgency=medium
+
+  * api: acl: add missing `/access/realm/<realm>`, `/access/group/<group>` and
+    `/sdn/zones/<zone>` to allowed ACL paths
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Jun 2021 10:31:19 +0200
+
+libpve-access-control (7.0-2) bullseye; urgency=medium
+
+  * fix #3402: add Pool.Audit privilege - custom roles containing
+    Pool.Allocate must be updated to include the new privilege.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 1 Jun 2021 11:28:38 +0200
+
+libpve-access-control (7.0-1) bullseye; urgency=medium
+
+  * re-build for Debian 11 Bullseye based releases
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 09 May 2021 18:18:23 +0200
+
+libpve-access-control (6.4-1) pve; urgency=medium
+
+  * fix #1670: change PAM service name to project specific name
+
+  * fix #1500: permission path syntax check for access control
+
+  * pveum: add resource pool CLI commands
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 24 Apr 2021 19:48:21 +0200
+
+libpve-access-control (6.1-3) pve; urgency=medium
+
+  * partially fix #2825: authkey: rotate if it was generated in the
+    future
+
+  * fix #2947: add an option to LDAP or AD realm to switch user lookup to case
+    insensitive
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Sep 2020 08:54:13 +0200
+
+libpve-access-control (6.1-2) pve; urgency=medium
+
+  * also check SDN permission path when computing coarse permissions heuristic
+    for UIs
+
+  * add SDN Permissions.Modify
+
+  * add VM.Config.Cloudinit
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 30 Jun 2020 13:06:56 +0200
+
+libpve-access-control (6.1-1) pve; urgency=medium
+
+  * pveum: add tfa delete subcommand for deleting user-TFA
+
+  * LDAP: don't complain about missing credentials on realm removal
+
+  * LDAP: skip anonymous bind when client certificate and key is configured
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 08 May 2020 17:47:41 +0200
+
+libpve-access-control (6.0-7) pve; urgency=medium
+
+  * fix #2575: die when trying to edit built-in roles
+
+  * add realm sub commands to pveum CLI tool
+
+  * api: domains: add user group sync API endpoint
+
+  * allow one to sync and import users and groups from LDAP/AD based realms
+
+  * realm: add default-sync-options to config for more convenient sync configuration
+
+  * api: token create: return also full token id for convenience
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 25 Apr 2020 19:35:17 +0200
+
+libpve-access-control (6.0-6) pve; urgency=medium
+
+  * API: add group members to group index
+
+  * implement API token support and management
+
+  * pveum: add 'pveum user token add/update/remove/list'
+
+  * pveum: add permissions sub-commands
+
+  * API: add 'permissions' API endpoint
+
+  * user.cfg: skip inexisting roles when parsing ACLs
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 29 Jan 2020 10:17:27 +0100
+
+libpve-access-control (6.0-5) pve; urgency=medium
+
+  * pveum: add list command for users, groups, ACLs and roles
+
+  * add initial permissions for experimental SDN integration
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 26 Nov 2019 17:56:37 +0100
+
+libpve-access-control (6.0-4) pve; urgency=medium
+
+  * ticket: use clinfo to get cluster name
+
+  * ldaps: add sslversion configuration property to support TLS 1.1 to 1.3 as
+    SSL version
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Nov 2019 11:55:11 +0100
+
+libpve-access-control (6.0-3) pve; urgency=medium
+
+  * fix #2433: increase possible TFA secret length
+
+  * parse user configuration: correctly parse group names in ACLs, for users
+    which begin their name with an @
+
+  * sort user.cfg entries alphabetically
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Oct 2019 08:52:23 +0100
+
+libpve-access-control (6.0-2) pve; urgency=medium
+
+  * improve CSRF verification compatibility with newer PVE
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 26 Jun 2019 20:24:35 +0200
+
+libpve-access-control (6.0-1) pve; urgency=medium
+
+  * ticket: properly verify exactly 5 minute old tickets
+
+  * use hmac_sha256 instead of sha1 for CSRF token generation
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Jun 2019 18:14:45 +0200
+
+libpve-access-control (6.0-0+1) pve; urgency=medium
+
+  * bump for Debian buster
+
+  * fix #2079: add periodic auth key rotation
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 May 2019 21:31:15 +0200
+
+libpve-access-control (5.1-10) unstable; urgency=medium
+
+  * add /access/user/{id}/tfa api call to get tfa types
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 15 May 2019 16:21:10 +0200
+
+libpve-access-control (5.1-9) unstable; urgency=medium
+
+  * store the tfa type in user.cfg allowing to get it without proxying the call
+    to a higher privileged daemon.
+
+  * tfa: realm required TFA should lock out users without TFA configured, as it
+    was done before Proxmox VE 5.4
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 30 Apr 2019 14:01:00 +0000
+
+libpve-access-control (5.1-8) unstable; urgency=medium
+
+  * U2F: ensure we save correct public key on registration
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 09 Apr 2019 12:47:12 +0200
+
+libpve-access-control (5.1-7) unstable; urgency=medium
+
+  * verify_ticket: allow general non-challenge tfa to be run as two step
+    call
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 08 Apr 2019 16:56:14 +0200
+
+libpve-access-control (5.1-6) unstable; urgency=medium
+
+  * more general 2FA configuration via priv/tfa.cfg
+
+  * add u2f api endpoints
+
+  * delete TFA entries when deleting a user
+
+  * allow users to change their TOTP settings
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 03 Apr 2019 13:40:26 +0200
+
+libpve-access-control (5.1-5) unstable; urgency=medium
+
+  * fix vnc ticket verification without authkey lifetime
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Mar 2019 10:43:17 +0100
+
+libpve-access-control (5.1-4) unstable; urgency=medium
+
+  * fix #1891: Add zsh command completion for pveum
+
+  * ground work to fix #2079: add periodic auth key rotation. Not yet enabled
+    to avoid issues on upgrade, will be enabled with 6.0
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Mar 2019 09:12:05 +0100
+
+libpve-access-control (5.1-3) unstable; urgency=medium
+
+  * api/ticket: move getting cluster name into an eval
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Nov 2018 12:59:36 +0100
+
+libpve-access-control (5.1-2) unstable; urgency=medium
+
+  * fix #1998: correct return properties for read_role
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 23 Nov 2018 14:22:40 +0100
+
+libpve-access-control (5.1-1) unstable; urgency=medium
+
+  * pveum: introduce sub-commands
+
+  * register userid with completion
+
+  * fix #233: return cluster name on successful login
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 15 Nov 2018 09:34:47 +0100
+
+libpve-access-control (5.0-8) unstable; urgency=medium
+
+  * fix #1612: ldap: make 2nd server work with bind domains again
+
+  * fix an error message where passing a bad pool id to an API function would
+    make it complain about a wrong group name instead
+
+  * fix the API-returned permission list so that the GUI knows to show the
+    'Permissions' tab for a storage to an administrator apart from root@pam
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 18 Jan 2018 13:34:50 +0100
+
+libpve-access-control (5.0-7) unstable; urgency=medium
+
+  * VM.Snapshot.Rollback privilege added
+
+  * api: check for special roles before locking the usercfg
+
+  * fix #1501: pveum: die when deleting special role
+
+  * API/ticket: rework coarse grained permission computation
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 5 Oct 2017 11:27:48 +0200
+
+libpve-access-control (5.0-6) unstable; urgency=medium
+
+  * Close #1470: Add server ceritifcate verification for AD and LDAP via the
+    'verify' option. For compatibility reasons this defaults to off for now,
+    but that might change with future updates.
+
+  * AD, LDAP: Add ability to specify a CA path or file, and a client
+    certificate via the 'capath', 'cert' and 'certkey' options.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Aug 2017 11:56:38 +0200
+
+libpve-access-control (5.0-5) unstable; urgency=medium
+
+  * change from dpkg-deb to dpkg-buildpackage
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Jun 2017 09:12:37 +0200
+
+libpve-access-control (5.0-4) unstable; urgency=medium
+
+  * PVE/CLI/pveum.pm: call setup_default_cli_env()
+
+  * PVE/Auth/PVE.pm: encode uft8 password before calling crypt
+
+  * check_api2_permissions: avoid warning about uninitialized value
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 02 May 2017 11:58:15 +0200
+
+libpve-access-control (5.0-3) unstable; urgency=medium
+
+  * use new PVE::OTP class from pve-common
+
+  * use new PVE::Tools::encrypt_pw from pve-common
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 30 Mar 2017 17:45:55 +0200
+
+libpve-access-control (5.0-2) unstable; urgency=medium
+
+  * encrypt_pw: avoid '+' for crypt salt
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 30 Mar 2017 08:54:10 +0200
+
+libpve-access-control (5.0-1) unstable; urgency=medium
+
+  * rebuild for PVE 5.0
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 6 Mar 2017 13:42:01 +0100
+
+libpve-access-control (4.0-23) unstable; urgency=medium
+
+  * use new PVE::Ticket class
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Jan 2017 13:42:06 +0100
+
+libpve-access-control (4.0-22) unstable; urgency=medium
+
+  * RPCEnvironment: removed check_volume_access() to avoid cyclic dependency
+    (moved to PVE::Storage)
+
+  * PVE::PCEnvironment: use new PVE::RESTEnvironment as base class
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Jan 2017 09:12:04 +0100
+
+libpve-access-control (4.0-21) unstable; urgency=medium
+
+  * setup_default_cli_env: expect $class as first parameter
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 12 Jan 2017 13:54:27 +0100
+
+libpve-access-control (4.0-20) unstable; urgency=medium
+
+  * PVE/RPCEnvironment.pm: new function setup_default_cli_env
+
+  * PVE/API2/Domains.pm: fix property description
+
+  * use new repoman for upload target
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 11 Jan 2017 12:13:26 +0100
+
+libpve-access-control (4.0-19) unstable; urgency=medium
+
+  * Close #833: ldap: non-anonymous bind support
+
+  * don't import 'RFC' from MIME::Base32
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 05 Aug 2016 13:09:08 +0200
+
+libpve-access-control (4.0-18) unstable; urgency=medium
+
+  * fix #1062: recognize base32 otp keys again
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 21 Jul 2016 08:43:18 +0200
+
+libpve-access-control (4.0-17) unstable; urgency=medium
+
+  * drop oathtool and libdigest-hmac-perl dependencies
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 11 Jul 2016 12:03:22 +0200
+
+libpve-access-control (4.0-16) unstable; urgency=medium
+
+  * use pve-doc-generator to generate man pages
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 08 Apr 2016 07:06:05 +0200
+
+libpve-access-control (4.0-15) unstable; urgency=medium
+
+  * Fix uninitialized warning when shadow.cfg does not exist
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 01 Apr 2016 07:10:57 +0200
+
+libpve-access-control (4.0-14) unstable; urgency=medium
+
+  * Add is_worker to RPCEnvironment
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 15 Mar 2016 16:47:34 +0100
+
+libpve-access-control (4.0-13) unstable; urgency=medium
+
+  * fix #916: allow HTTPS to access custom yubico url
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 14 Mar 2016 11:39:23 +0100
+
+libpve-access-control (4.0-12) unstable; urgency=medium
+
+  * Catch certificate errors instead of segfaulting
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Mar 2016 14:41:01 +0100
+
+libpve-access-control (4.0-11) unstable; urgency=medium
+
+  * Fix #861: use safer sprintf formatting
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 08 Jan 2016 12:52:39 +0100
+
+libpve-access-control (4.0-10) unstable; urgency=medium
+
+  *  Auth::LDAP, Auth::AD: ipv6 support
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Dec 2015 12:09:32 +0100
+
+libpve-access-control (4.0-9) unstable; urgency=medium
+
+  * pveum: implement bash completion
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 01 Oct 2015 17:22:52 +0200
+
+libpve-access-control (4.0-8) unstable; urgency=medium
+
+  * remove_storage_access: cleanup of access permissions for removed storage
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 19 Aug 2015 15:39:15 +0200
+
+libpve-access-control (4.0-7) unstable; urgency=medium
+
+  * new helper to remove access permissions for removed VMs
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Aug 2015 07:57:02 +0200
+
+libpve-access-control (4.0-6) unstable; urgency=medium
+
+  * improve parse_user_config, parse_shadow_config
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 27 Jul 2015 13:14:33 +0200
+
+libpve-access-control (4.0-5) unstable; urgency=medium
+
+  * pveum: check for $cmd being defined
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 10 Jun 2015 10:40:15 +0200
+
+libpve-access-control (4.0-4) unstable; urgency=medium
+
+  * use activate-noawait triggers
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 01 Jun 2015 12:25:31 +0200
+
+libpve-access-control (4.0-3) unstable; urgency=medium
+
+  * IPv6 fixes
+
+  * non-root buildfix
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 May 2015 11:15:44 +0200
+
+libpve-access-control (4.0-2) unstable; urgency=medium
+
+  * trigger pve-api-updates event
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 05 May 2015 15:06:38 +0200
+
+libpve-access-control (4.0-1) unstable; urgency=medium
+
+  * bump version for Debian Jessie
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 26 Feb 2015 11:22:01 +0100
+
+libpve-access-control (3.0-16) unstable; urgency=low
+
+  * root@pam can now be disabled in GUI.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 30 Jan 2015 06:20:22 +0100
+
+libpve-access-control (3.0-15) unstable; urgency=low
+
+  * oath: add 'step' and 'digits' option
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Jul 2014 06:59:52 +0200
+
+libpve-access-control (3.0-14) unstable; urgency=low
+  
+  * add oath two factor auth
+
+  * add oathkeygen binary to generate keys for oath
+  
+  * add yubico two factor auth
+
+  * dedend on oathtool
+  
+  * depend on libmime-base32-perl
+  
+  * allow to write builtin auth domains config (comment/tfa/default)
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Jul 2014 13:09:56 +0200
+
+libpve-access-control (3.0-13) unstable; urgency=low
+
+  * use correct connection string for AD auth
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 May 2014 07:16:09 +0200
+
+libpve-access-control (3.0-12) unstable; urgency=low
+
+  * add dummy API for GET /access/ticket (useful to generate login pages)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 30 Apr 2014 14:47:56 +0200
+
+libpve-access-control (3.0-11) unstable; urgency=low
+
+  * Sets common hot keys for spice client
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 31 Jan 2014 10:24:28 +0100
+
+libpve-access-control (3.0-10) unstable; urgency=low
+
+  * implement helper to generate SPICE remote-viewer configuration
+  
+  * depend on libnet-ssleay-perl
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 10 Dec 2013 10:45:08 +0100
+
+libpve-access-control (3.0-9) unstable; urgency=low
+
+  * prevent user enumeration attacks
+  
+  * allow dots in access paths
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Nov 2013 09:06:38 +0100
+
+libpve-access-control (3.0-8) unstable; urgency=low
+
+  * spice: use lowercase hostname in ticktet signature
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 28 Oct 2013 08:11:57 +0100
+
+libpve-access-control (3.0-7) unstable; urgency=low
+
+  * check_volume_access : use parse_volname instead of path, and remove 
+    path related code.
+  
+  * use warnings instead of global -w flag.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 01 Oct 2013 12:35:53 +0200
+
+libpve-access-control (3.0-6) unstable; urgency=low
+
+  * use shorter spiceproxy tickets
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Jul 2013 12:39:09 +0200
+
+libpve-access-control (3.0-5) unstable; urgency=low
+
+  * add code to generate tickets for SPICE
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 26 Jun 2013 13:08:32 +0200
+
+libpve-access-control (3.0-4) unstable; urgency=low
+
+  * moved add_vm_to_pool/remove_vm_from_pool from qemu-server
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 14 May 2013 11:56:54 +0200
+
+libpve-access-control (3.0-3) unstable; urgency=low
+
+  * Add new role PVETemplateUser (and VM.Clone privilege)
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 29 Apr 2013 11:42:15 +0200
+
+libpve-access-control (3.0-2) unstable; urgency=low
+
+  * remove CGI.pm related code (pveproxy does not need that)
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 15 Apr 2013 12:34:23 +0200
+
+libpve-access-control (3.0-1) unstable; urgency=low
+
+  * bump version for wheezy release
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 Mar 2013 08:07:06 +0100
+
+libpve-access-control (1.0-26) unstable; urgency=low
+
+  * check_volume_access: fix access permissions for backup files
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 28 Feb 2013 10:00:14 +0100
+
+libpve-access-control (1.0-25) unstable; urgency=low
+
+  * add VM.Snapshot permission 
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 Sep 2012 09:23:32 +0200
+
+libpve-access-control (1.0-24) unstable; urgency=low
+
+  * untaint path (allow root to restore arbitrary paths)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 Jun 2012 13:06:34 +0200
+
+libpve-access-control (1.0-23) unstable; urgency=low
+
+  * correctly compute GUI capabilities (consider pools)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 30 May 2012 08:47:23 +0200
+
+libpve-access-control (1.0-22) unstable; urgency=low
+
+  * new plugin architecture for Auth modules, minor API change for Auth
+    domains (new 'delete' parameter)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 May 2012 07:21:44 +0200
+
+libpve-access-control (1.0-21) unstable; urgency=low
+
+  * do not allow user names including slash
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 24 Apr 2012 10:07:47 +0200
+
+libpve-access-control (1.0-20) unstable; urgency=low
+
+  * add ability to fork cli workers in background
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Apr 2012 08:28:20 +0200
+
+libpve-access-control (1.0-19) unstable; urgency=low
+
+  * return set of privileges on login - can be used to adopt GUI
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Apr 2012 10:25:10 +0200
+
+libpve-access-control (1.0-18) unstable; urgency=low
+
+  * fix bug #151: correctly parse username inside ticket
+  
+  * fix bug #152: allow user to change his own password
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 11 Apr 2012 09:40:15 +0200
+
+libpve-access-control (1.0-17) unstable; urgency=low
+
+  * set propagate flag by default
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 01 Mar 2012 12:40:19 +0100
+
+libpve-access-control (1.0-16) unstable; urgency=low
+
+  * add 'pveum passwd' method
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 Feb 2012 12:05:25 +0100
+
+libpve-access-control (1.0-15) unstable; urgency=low
+
+  * Add VM.Config.CDROM privilege to PVEVMUser rule
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Feb 2012 11:44:23 +0100
+
+libpve-access-control (1.0-14) unstable; urgency=low
+
+  * fix buf in userid-param permission check
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Feb 2012 10:52:35 +0100
+
+libpve-access-control (1.0-13) unstable; urgency=low
+
+  * allow more characters in ldap base_dn attribute
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Feb 2012 06:17:02 +0100
+
+libpve-access-control (1.0-12) unstable; urgency=low
+
+  * allow more characters with realm IDs 
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Feb 2012 08:50:33 +0100
+
+libpve-access-control (1.0-11) unstable; urgency=low
+
+  * fix bug in exec_api2_perm_check
+  
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 15 Feb 2012 07:06:30 +0100
+
+libpve-access-control (1.0-10) unstable; urgency=low
+
+  * fix ACL group name parser
+  
+  * changed 'pveum aclmod' command line arguments
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 14 Feb 2012 12:08:02 +0100
+
+libpve-access-control (1.0-9) unstable; urgency=low
+
+  * fix bug in check_volume_access (fixes vzrestore)
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 13 Feb 2012 09:56:37 +0100
+
+libpve-access-control (1.0-8) unstable; urgency=low
+
+  * fix return value for empty ACL list.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 10 Feb 2012 11:25:04 +0100
+
+libpve-access-control (1.0-7) unstable; urgency=low
+
+  * fix bug #85: allow root@pam to generate tickets for other users
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Jan 2012 06:40:18 +0100
+
+libpve-access-control (1.0-6) unstable; urgency=low
+
+  * API change: allow to filter enabled/disabled users.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 11 Jan 2012 12:30:37 +0100
+
+libpve-access-control (1.0-5) unstable; urgency=low
+
+  * add a way to return file changes (diffs): set_result_changes()
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 20 Dec 2011 11:18:48 +0100
+
+libpve-access-control (1.0-4) unstable; urgency=low
+
+  * new environment type for ha agents
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 13 Dec 2011 10:08:53 +0100
+
+libpve-access-control (1.0-3) unstable; urgency=low
+
+  * add support for delayed parameter parsing - We need that to disable
+    file upload for normal API request (avoid DOS attacks)
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 02 Dec 2011 09:56:10 +0100
+
+libpve-access-control (1.0-2) unstable; urgency=low
+
+  * fix bug in fork_worker
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 11 Oct 2011 08:37:05 +0200
+
+libpve-access-control (1.0-1) unstable; urgency=low
+
+  * allow '-' in permission paths
+  
+  * bump version to 1.0
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 27 Jun 2011 13:51:48 +0200
+
+libpve-access-control (0.1) unstable; urgency=low
+
+  * first dummy package - no functionality
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 09 Jul 2009 16:03:00 +0200
+

@@ -1,0 +1,2 @@
+git clone git://git.proxmox.com/git/pve-docs.git
+git checkout cf7935c8b09f7360602b82119c2db032e5c0ccf6

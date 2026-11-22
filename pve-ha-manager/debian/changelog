@@ -1,0 +1,1211 @@
+pve-ha-manager (5.2.7) trixie; urgency=medium
+
+  * lrm: catch and log errors while in maintenance mode instead of exiting.
+    Previously, failing to read the manager status, for example on a
+    transient pmxcfs error, made the LRM exit with its watchdog still armed
+    and its agent lock still held if HA resources were active on the node.
+
+  * lrm: read the manager status and the HA resource config only once per
+    round, and prune stale command results once per round instead of for
+    every finished command. This considerably reduces the work per round with
+    many HA resources, for example when starting several hundred HA resources
+    on a node at once.
+
+  * node maintenance: record a request to enable the maintenance mode also
+    for a node that is already in maintenance without one, most notably while
+    it shuts down or reboots with the 'migrate' shutdown policy. Such a node
+    now stays in maintenance mode once it is back online, instead of getting
+    its services moved back. This also no longer drops a request to enable
+    the maintenance mode that was queued right after one to disable it.
+
+  * cli: node-maintenance: reject requests that the CRM would ignore and
+    report the reason, instead of queuing them and only logging that the CRM
+    ignored them. This covers enabling the maintenance mode while HA is
+    disarmed or for a node that is not online, and any request for a node
+    the HA stack does not track yet. Requesting the maintenance mode again
+    for a node it is already requested for still succeeds. The CRM's log
+    messages for ignored requests now share a format that names the node.
+
+  * api: status: report for LRM entries whether the maintenance mode is
+    requested for the node and whether such a request is still queued for
+    the CRM, used by the new node maintenance menu in the web interface.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Nov 2026 23:06:16 +0100
+
+pve-ha-manager (5.2.6) trixie; urgency=medium
+
+  * fix #7974: dynamic scheduler: predict the effect of migrating a VM from
+    its memory usage on the host, which is also what the imbalance that
+    triggers rebalancing is based on. Using the memory usage inside the guest
+    instead could cause migrations back and forth. Containers keep using their
+    memory usage, as there is no host value for them.
+
+  * fix #8240: lrm: start the queued commands that waited the longest first,
+    as intended. With more resources than the LRM could handle in one round,
+    it always picked the commands of the same resources, so others could stay
+    in a state like 'starting' for as long as the load lasted.
+
+  * migrate: support migration options that the VM and container migrate API
+    endpoints forward, currently 'with-conntrack-state' for VMs (fix #7053)
+    and 'skip-config-check' for both. The LRM uses them when migrating the
+    resource and, filtered by resource type, the resources that move along
+    due to positive resource affinity rules. This needs pve-manager 9.2.31 or
+    newer on all nodes, otherwise a warning is logged and the options are
+    ignored.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Nov 2026 14:35:28 +0100
+
+pve-ha-manager (5.2.5) trixie; urgency=medium
+
+  * rules: node affinity: add support for negative node affinity rules through
+    a new 'affinity' property, letting users declare the nodes an HA resource
+    must not (strict) or should not (non-strict) run on. This is the inverse
+    of the existing positive node affinity and makes it easy to keep resources
+    away from specific nodes without enumerating every allowed one.
+
+  * fix #6084: lrm: leave maintenance mode again once the maintenance request
+    is lifted, even when an HA resource is stuck on the node because it could
+    not be moved elsewhere. Previously the LRM stayed in maintenance mode
+    indefinitely in that case.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 Jul 2026 23:15:02 +0200
+
+pve-ha-manager (5.2.4) trixie; urgency=medium
+
+  * lrm: become active again while disarmed if a HA resource on this node is
+    still in a transient state (migrate, relocate, fence, recovery), drive it
+    through the transition, then go back to idle. Without this, an idle LRM
+    that started up into disarm mode (or restarted into it) never publishes a
+    result for the in-flight transition, so the CRM keeps deferring the disarm
+    forever.
+
+  * manager: disarm: freeze non-deferred services on the deferred disarm
+    cycle, instead of waiting until all transient transitions have completed.
+    Otherwise an LRM restart during deferred disarm hangs in 'restart' mode
+    waiting for the active-service count to drop to zero, which only happens
+    once the CRM has frozen the LRM's services.
+
+  * manager: default the CRS section in datacenter.cfg to an empty hash to
+    keep the CRM from crashing on misformatted entries. Together with the fix
+    in libpve-cluster-perl 9.1.5 to drop such entries on read, existing
+    affected configs are handled gracefully.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 May 2026 19:28:52 +0200
+
+pve-ha-manager (5.2.3) trixie; urgency=medium
+
+  * lrm: exit cleanly on shutdown request while the HA stack is disarmed,
+    avoiding a hang on any LRM restart (package upgrade, manual service
+    restart) or node shutdown until HA gets re-armed again. As a side
+    effect, a node shutdown while disarmed no longer queues stop jobs for
+    HA services, which matches the disarm semantics.
+
+  * manager: load-balance: skip with a warning if both the imbalance
+    threshold and the minimum improvement margin are set to zero, as that
+    degenerate config would otherwise cause perpetual migration churn.
+
+  * manager: scale the HA auto-rebalance threshold and minimum improvement
+    margin from a 0.0-1.0 fraction to 0-100 percent, matching the percent
+    representation in the HA panel and configuration UI. This is a breaking
+    change for existing alpha-test configs.
+
+  * sim: log: stop interpreting messages as a sprintf format string, which
+    mangled output for any message containing a literal percent character.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 17 May 2026 00:23:30 +0200
+
+pve-ha-manager (5.2.2) trixie; urgency=medium
+
+  * fix #7557: introduce 'auto-rebalance' property to allow users opting some
+    HA resources out from getting moved by dynamic CRS during automatic
+    rebalancing.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 May 2026 11:37:08 +0200
+
+pve-ha-manager (5.2.1) trixie; urgency=medium
+
+  * fix #1497: prevent manual migrations of HA resources to nodes where they
+    are not allowed by their node affinity rules, including the case where
+    failback would immediately move them back to a higher priority node.
+
+  * report all blockers when a manual HA resource migration cannot be queued,
+    instead of stopping at the first reason found.
+
+  * api: status: show the current load imbalance value when an automatic
+    load-rebalancing CRS mode is active, giving users a basic indicator in the
+    UI.
+
+  * with the bumped libpve-rs dependency, the load-imbalance metric used by
+    the automatic rebalancer is now normalized to [0, 1], so the value can be
+    interpreted on its own (and as a percentage in the UI) rather than only by
+    comparison. The default rebalance threshold may now trigger fewer
+    migrations than before for the same workload.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 May 2026 06:43:31 +0200
+
+pve-ha-manager (5.2.0) trixie; urgency=medium
+
+  * add dynamic load scheduler that uses current resource usage stats (CPU
+    load, memory) from pvestatd for scheduling decisions, complementing the
+    existing static scheduler that only considers maximum configured capacity.
+
+  * implement automatic rebalancing for HA resources. When enabled, the CRM
+    monitors cluster node imbalance and automatically migrates services to
+    restore balance. Resources in strict positive affinity rules are treated
+    as bundles and moved together. Rebalancing is configurable through the new
+    datacenter config options for imbalance threshold, hold duration, and
+    improvement margin.
+
+  * fix api: rules: allow updating a rule without setting the resources
+    parameter, which previously failed with an assertion error due to
+    validating an undefined value.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 02 Apr 2026 17:58:13 +0200
+
+pve-ha-manager (5.1.3) trixie; urgency=medium
+
+  * fix #2751: add disarm-ha and arm-ha commands for safe cluster-wide
+    maintenance, allowing the admin to temporarily disable automatic fencing
+    and recovery. Two resource modes are available: 'freeze' locks all
+    services in place, 'ignore' suspends HA tracking so services can be
+    managed manually. All HA service watchdogs are released when fully
+    disarmed, the underlying watchdog-mux must still keep the /dev/watchdog
+    device open as not all watchdog types support a graceful deactivate.
+
+  * api: status: add fencing entry showing the HA stack's armed state and CRM
+    watchdog status.
+
+  * scheduler: fix type confusion regression for container resource stats that
+    could cause adding a container with explicit 'cores' to fail.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 27 Mar 2026 00:10:12 +0100
+
+pve-ha-manager (5.1.2) trixie; urgency=medium
+
+  * fix #7399: api: rules: reject empty nodes and resources properties, which
+    could result in invalid rule sections being written to the config.
+
+  * crm: become active to clean up stale service status entries that persist
+    when services are removed from the HA config while the CRM is stopped,
+    which previously showed as stuck in "deleting" state.
+
+  * resource placement scheduler: include running non-HA resources in load
+    accounting for more accurate placement decisions.
+
+  * resources: expand 'max_restart' option description to clarify behavior
+    relative to 'max_relocate'.
+
+  * watchdog-mux: improve logging by tracking the client PID and including it
+    in all client-specific messages, and log on new client connect, graceful
+    disconnect, and when all watchdog-mux connections are closed (underlying
+    /dev/watchdog still needs to be active).
+
+  * clear lock status cache on lock release to avoid spurious "lost lock"
+    error when a lock is released and re-acquired within the same process
+    lifetime. This was harmless but might have caused confusion.
+
+  * various fixes for typos and misleading error messages across the tree.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 22 Mar 2026 17:14:34 +0100
+
+pve-ha-manager (5.1.1) trixie; urgency=medium
+
+  * assert ha resource has correct guest type as otherwise a HA resource with
+    the wrong guest type can be added to the HA resources configuration, which
+    will make its methods (start, shutdown, migrate, ...) fail.
+
+  * fix #7133: manager: skip update on group to affinity rules migration for
+    resources that have no group configured anyway.
+
+  * manager: group migration: bulk update changes to resource config to reduce
+    the total time required for a migration.
+
+  * ensure node is known to cluster config before committing a new node
+    status. While we pruned such unknown entries, that was only done after an
+    hour and thus showed any wrongly spelled node until that happened in the
+    status.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Feb 2026 18:15:40 +0100
+
+pve-ha-manager (5.1.0) trixie; urgency=medium
+
+  * fix #6801: fix an issue where resources with positive affinity could
+    accidentally be migrated back to the source node after a migration. This
+    could happen in case one of the resources took more than 10 seconds longer
+    to be migrated than the other(s).
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 12 Dec 2025 14:05:59 +0100
+
+pve-ha-manager (5.0.8) trixie; urgency=medium
+
+  * api: resources: fix possible warning of uninitialized value when checking
+    a resource's state.
+
+  * various improvements for the HA simulator, among other things:
+    - remove hidden service default groups.
+    - ensure all resources have a valid static resource usage state from the
+      start.
+    - clean up static service stats on service deletion.
+    - avoid overly verbose prints when changing a resource's usage stats.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 17 Nov 2025 22:37:03 +0100
+
+pve-ha-manager (5.0.7) trixie; urgency=medium
+
+  * compile ha rules to a more efficient representation, dramatically reducing
+    the time needed to evaluate all rules every round.
+
+  * affinity rules: do not add ignored resources as dependent resources.
+
+  * api: status: sync active service counting with lrm's helper.
+
+  * fix #6613: update rules containing a resource that is currently being
+    removed from being managed by the HA stack.
+
+  * api: add purge parameter for HA resource removal.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Nov 2025 20:47:44 +0100
+
+pve-ha-manager (5.0.6) trixie; urgency=medium
+
+  * simulator: integrate basic support for simulating the cluster resource
+    scheduler.
+
+  * manager: make online node usage computation granular and do not rebuild it
+    from scratch on every round. This greatly improves the performance when
+    managing many HA resources, making scheduling up to ten thousand resources
+    at the same time feasible.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Nov 2025 13:34:31 +0100
+
+pve-ha-manager (5.0.5) trixie; urgency=medium
+
+  * manager: support older versioning schema for ha group migration.
+
+  * fix #6839: move PVE::Notify usage to "real" Env to avoid error in HA
+    simulator on non-PVE systems.
+
+  * fix #6881: api: relocate resource: fix check to avoid Perl warning.
+
+  * manager: fix precedence in mixed resource affinity rules usage that could
+    lead to a resource not getting migrated while it could be.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 03 Oct 2025 22:51:47 +0200
+
+pve-ha-manager (5.0.4) trixie; urgency=medium
+
+  * api: rules: cope if disable parameter is explicitly set to a falsy value.
+
+  * rules: make positive affinity resources migrate on single resource fail.
+
+  * rules: allow same resources in node and resource affinity rules but
+    restrict inter-plugin resource references to simple cases:
+    - the resources of a resource affinity rule are not part of any node
+      affinity rule, which has multiple priority groups. This is because of
+      the dynamic nature of priority groups.
+    - the resources of a positive resource affinity rule are part of at most
+      one node affinity rule, but no more. Otherwise, it is not easily
+      decidable (yet) what the common node restrictions are.
+    - the positive resource affinity rules, which have at least one resource
+      which is part of one node affinity rule, make all the resources part of
+      the node affinity rule.
+    - the resources of a negative resource affinity rule are not restricted
+      by their node affinity rules in such a way that these do not have enough
+      nodes to be separated on.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 01 Aug 2025 19:34:52 +0200
+
+pve-ha-manager (5.0.3) trixie; urgency=medium
+
+  * rules: add global checks between node and resource affinity rules, being
+    currently overly strict in what is allowed and what not, e.g. combinations
+    of any resources-to-nodes and resources-to-resources rules are not
+    allowed, this safety constraint will be loosened in a future version to
+    allow simple cases that are always straight forward to resolve.
+
+  * manager: apply resource affinity rules when selecting service nodes.
+
+  * api: resources: add check for resource affinity in resource migrations.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 31 Jul 2025 11:24:29 +0200
+
+pve-ha-manager (5.0.2) trixie; urgency=medium
+
+  * watchdog-mux: restore if guard for watchdog updates to avoid an recent
+    regression causing an extra round of delay when fencing due to client
+    timeout.
+
+  * introduce HA affinity rules, which will replace the HA groups and provide
+    the groundwork for future service-to-service affinity rules.
+
+  * manager: migrate ha groups to node affinity rules in-memory and write out
+    the new config once all nodes have a recent enough pve-manager version
+    installed, which depends on the new ha-manager version.
+
+  * api: groups: disallow calls to HA groups endpoints if already fully
+    migrated to affinity rules.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 31 Jul 2025 09:01:39 +0200
+
+pve-ha-manager (5.0.1) trixie; urgency=medium
+
+  * LRM: count incoming migrations towards a nodes active resources, ensuring
+    an idle LRM will get active on incoming migrations.
+
+  * watchdog-mux: log a warning when the watchdog counter is 10s before
+    expiration and sync journal in that case.
+
+  * watchdog-mux: break out of loop when updates are disabled to ensure we hit
+    the code path where it will trigger another systemd-journal sync.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Jul 2025 02:22:44 +0200
+
+pve-ha-manager (5.0.0) trixie; urgency=medium
+
+  * re-build for Debian 13 Trixie based Proxmox VE 9 releases.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Jun 2025 15:50:27 +0200
+
+pve-ha-manager (4.0.7) bookworm; urgency=medium
+
+  * notifications: overhaul fence notification templates.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Apr 2025 23:24:19 +0200
+
+pve-ha-manager (4.0.6) bookworm; urgency=medium
+
+  * tools: group verbose description: explicitly state that higher number
+    means a higher priority
+
+  * fix #5243: make CRM go idle after ~15 min of no service being configured.
+    This is mostly cosmetic as the CRM never needed to trigger self-fencing on
+    quorum-loss anyway, as all state under the CRM's control is managed by the
+    pmxcfs, which is already protected by quorum and cluster synchronisation.
+
+  * crm: get active if there are pending CRM commands and it seems that no CRM
+    is already active. This ensures any CRM command, like disabling the
+    node-maintenance mode is properly processed. Currently this is mostly
+    cosmetic though, but not unimportant as we show the maintenance state in
+    the UI since not that long ago.
+
+  * crm: get active if there are nodes that probably need to leave maintenance
+    mode. This is very similar to the point above but is less likely to
+    trigger if just CLI/API is used.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 17 Nov 2024 20:36:17 +0100
+
+pve-ha-manager (4.0.5) bookworm; urgency=medium
+
+  * env: notify: use named templates instead of passing template strings
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 04 Jun 2024 11:10:05 +0200
+
+pve-ha-manager (4.0.4) bookworm; urgency=medium
+
+  * d/postinst: make deb-systemd-invoke non-fatal
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Apr 2024 13:47:18 +0200
+
+pve-ha-manager (4.0.3) bookworm; urgency=medium
+
+  * manager: send notifications via new notification module
+
+  * fix #4984: manager: add service to migration-target usage only if online
+
+  * crs: avoid auto-vivification when adding node to service usage
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 17 Nov 2023 14:49:03 +0100
+
+pve-ha-manager (4.0.2) bookworm; urgency=medium
+
+  * cluster resource manager: clear stale maintenance node, which can be
+    caused by simultaneous cluster shutdown
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 13 Jun 2023 08:35:52 +0200
+
+pve-ha-manager (4.0.1) bookworm; urgency=medium
+
+  * test, simulator: make it possible to add already running service
+
+  * lrm: do not migrate via rebalance-on-start if service already running upon
+    rebalance on start
+
+  * api: fix/add return description for status endpoint
+
+  * resources: pve: avoid relying on internal configuration details, use new
+    helpers in pve-container and qemu-server
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 09 Jun 2023 10:41:06 +0200
+
+pve-ha-manager (4.0.0) bookworm; urgency=medium
+
+  * re-build for Proxmox VE 8 / Debian 12 Bookworm
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 24 May 2023 19:26:51 +0200
+
+pve-ha-manager (3.6.1) bullseye; urgency=medium
+
+  * cli: assert that node exist when changing CRS request state to avoid
+    creating a phantom node by mistake
+
+  * manager: ensure node-request state gets transferred to new active CRM, so
+    that the request for (manual) maintenance mode is upheld, even if the node
+    that is in maintenace mode is also the current active CRM and gets
+    rebooted.
+
+  * lrm: ignore shutdown policy if (manual) maintenance mode is requested to
+    avoid exiting from maintenance mode to early.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 20 Apr 2023 14:16:14 +0200
+
+pve-ha-manager (3.6.0) bullseye; urgency=medium
+
+  * fix #4371: add CRM command to switch an online node manually into
+    maintenance (without reboot), moving away all active services, but
+    automatically migrate them back once the maintenance mode is disabled
+    again.
+
+  * manager: service start: make EWRONG_NODE a non-fatal error, but try to
+    find its the actual node the service is residing on
+
+  * manager: add new intermediate 'request_started' state for stop->start
+    transitions
+
+  * request start: optionally enable automatic selection of the best rated
+    node by the CRS on service start up, bypassing the very high priority of
+    the current node on which a service is located.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Mar 2023 13:38:26 +0100
+
+pve-ha-manager (3.5.1) bullseye; urgency=medium
+
+  * manager: update crs scheduling mode once per round to avoid the need for a
+    restart of the currently active manager.
+
+  * api: status: add CRS info to manager if not set to default
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 19 Nov 2022 15:51:11 +0100
+
+pve-ha-manager (3.5.0) bullseye; urgency=medium
+
+  * env: datacenter config: include crs (cluster-resource-scheduling) setting
+
+  * manager: use static resource scheduler when configured
+
+  * manager: avoid scoring nodes if maintenance fallback node is valid
+
+  * manager: avoid scoring nodes when not trying next and current node is
+    valid
+
+  * usage: static: use service count on nodes as a fallback
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Nov 2022 15:02:55 +0100
+
+pve-ha-manager (3.4.0) bullseye; urgency=medium
+
+  * switch to native version formatting
+
+  * fix accounting of online services when moving services due to their source
+    node going gracefully nonoperational (maintenance mode). This ensures a
+    better balance of services on the cluster after such an operation.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 22 Jul 2022 09:21:20 +0200
+
+pve-ha-manager (3.3-4) bullseye; urgency=medium
+
+  * lrm: fix getting stuck on restart due to finished worker state not
+    being collected
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Apr 2022 14:01:55 +0200
+
+pve-ha-manager (3.3-3) bullseye; urgency=medium
+
+  * lrm: avoid possible job starvation on huge workloads
+
+  * lrm: increase run_worker loop-time for doing actually work to 80%
+    duty-cycle
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 20 Jan 2022 18:05:33 +0100
+
+pve-ha-manager (3.3-2) bullseye; urgency=medium
+
+  * fix #3826: fix restarting LRM/CRM when triggered by package management
+    system due to other updates
+
+  * lrm: also check CRM node-status for determining if there's a fence-request
+    and avoid starting up in that case to ensure that the current manager can
+    get our lock and do a clean fence -> unknown -> online FSM transition.
+    This avoids a problematic edge case where an admin manually removed all
+    services of a to-be-fenced node, and re-added them again before the
+    manager could actually get that nodes LRM lock.
+
+  * manage: handle edge case where a node gets seemingly stuck in 'fence'
+    state if all its services got manually removed by an admin before the
+    fence transition could be finished. While the LRM could come up again in
+    previous versions (it won't now, see above point) and start/stop services
+    got executed, the node was seen as unavailable for all recovery,
+    relocation and migrate actions.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 19 Jan 2022 14:30:15 +0100
+
+pve-ha-manager (3.3-1) bullseye; urgency=medium
+
+  * LRM: release lock and close watchdog if no service configured for >10min
+
+  * manager: make recovery actual state in finite state machine, showing a
+    clear transition from fence -> reocvery.
+
+  * fix #3415: never switch in error state on recovery, try to find a new node
+    harder. This improves using the HA manager for services with local
+    resources (e.g., local storage) to ensure it always gets started, which is
+    an OK use-case as long as the service is restricted to a group with only
+    that node. Previously failure of that node would have a high possibility
+    of the service going into the errors state, as no new node can be found.
+    Now it will retry finding a new node, and if one of the restricted set,
+    e.g., the node it was previous on, comes back up, it will start again
+    there.
+
+  * recovery: allow disabling a in-recovery service manually
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 02 Jul 2021 20:03:29 +0200
+
+pve-ha-manager (3.2-2) bullseye; urgency=medium
+
+  * fix systemd service restart behavior on package upgrade with Debian
+    Bullseye
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 May 2021 11:38:42 +0200
+
+pve-ha-manager (3.2-1) bullseye; urgency=medium
+
+  * Re-build for Debian Bullseye / PVE 7
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 12 May 2021 20:55:53 +0200
+
+pve-ha-manager (3.1-1) pve; urgency=medium
+
+  * allow 'with-local-disks' migration for replicated guests
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 31 Aug 2020 10:52:23 +0200
+
+pve-ha-manager (3.0-9) pve; urgency=medium
+
+  * factor out service configured/delete helpers
+
+  * typo and grammar fixes
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 12 Mar 2020 13:17:36 +0100
+
+pve-ha-manager (3.0-8) pve; urgency=medium
+
+  * bump LRM stop wait time to an hour
+
+  * do not mark maintenaned nodes as unkown
+
+  * api/status: extra handling of maintenance mode
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 02 Dec 2019 10:33:03 +0100
+
+pve-ha-manager (3.0-6) pve; urgency=medium
+
+  * add 'migrate' node shutdown policy
+
+  * do simple fallback if node comes back online from maintenance
+
+  * account service to both, source and target during migration
+
+  * add 'After' ordering for SSH and pveproxy to LRM service, ensuring the node
+    stays accessible until HA services got moved or shutdown, depending on
+    policy.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 26 Nov 2019 18:03:26 +0100
+
+pve-ha-manager (3.0-5) pve; urgency=medium
+
+  * fix #1339: remove more locks from services IF the node got fenced
+
+  * adapt to qemu-server code refactoring
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 20 Nov 2019 20:12:49 +0100
+
+pve-ha-manager (3.0-4) pve; urgency=medium
+
+  * use PVE::DataCenterConfig from new split-out cluster library package
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Nov 2019 12:16:29 +0100
+
+pve-ha-manager (3.0-3) pve; urgency=medium
+
+  * fix #1919, #1920: improve handling zombie (without node) services
+
+  * fix # 2241: VM resource: allow migration with local device, when not running
+
+  * HA status: render removal transition of service as 'deleting'
+
+  * fix #1140: add crm command 'stop', which allows to request immediate
+    service hard-stops if a timeout of zero (0) is passed
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 11 Nov 2019 17:04:35 +0100
+
+pve-ha-manager (3.0-2) pve; urgency=medium
+
+  * services: update PIDFile to point directly to /run
+
+  * fix #2234: fix typo in service description
+
+  * Add missing Dependencies to pve-ha-simulator
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Jul 2019 19:26:03 +0200
+
+pve-ha-manager (3.0-1) pve; urgency=medium
+
+  * handle the case where a node gets fully purged
+
+  * Re-build for Debian Buster / PVE 6
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 May 2019 19:11:59 +0200
+
+pve-ha-manager (2.0-9) unstable; urgency=medium
+
+  * get_ha_settings: cope with (temporarily) unavailable pmxcfs
+
+  * lrm: exit on restart and agent lock lost for > 90s
+
+  * service data: only set failed_nodes key if needed
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 04 Apr 2019 16:27:32 +0200
+
+pve-ha-manager (2.0-8) unstable; urgency=medium
+
+  * address an issue in dpkg 1.18 with wrong trigger cycle detections if cyclic
+    dependencies are involed
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 Mar 2019 07:49:58 +0100
+
+pve-ha-manager (2.0-7) unstable; urgency=medium
+
+  * fix #1842: do not pass forceStop to CT shutdown
+
+  * fix #1602: allow one to delete ignored services over API
+
+  * fix #1891: Add zsh command completion for ha-manager CLI tools
+
+  * fix #1794: VM resource: catch qmp command exceptions
+
+  * show sent emails in regression tests
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 04 Mar 2019 10:37:25 +0100
+
+pve-ha-manager (2.0-6) unstable; urgency=medium
+
+  * fix #1378: allow one to specify a service shutdown policy
+
+  * remove some unused external dependencies from the standalone simulator
+    package
+
+  * document api result for ha resources
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Jan 2019 12:59:27 +0100
+
+pve-ha-manager (2.0-5) unstable; urgency=medium
+
+  * skip CRM and LRM work if last cfs update failed
+
+  * regression test system: allow to simulate cluster fs failures
+
+  * postinst: drop transitional cleanup for systemd watchdog mux socket
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Feb 2018 11:00:12 +0100
+
+pve-ha-manager (2.0-4) unstable; urgency=medium
+
+  * address timing issues happening when pve-cluster.service is being restarted
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 09 Nov 2017 11:46:50 +0100
+
+pve-ha-manager (2.0-3) unstable; urgency=medium
+
+  * add ignore state for resources
+
+  * lrm/crm service: restart on API changes
+
+  * lrm.service: do not timeout on stop
+
+  * fix #1347: let postfix fill in FQDN in fence mails
+
+  * fix #1073: do not count backup-suspended VMs as running
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 13 Oct 2017 11:10:51 +0200
+
+pve-ha-manager (2.0-2) unstable; urgency=medium
+
+  * explicitly sync journal when disabling watchdog updates
+
+  * always queue service stop if node shuts down
+
+  * Fix shutdown order of HA and storage services
+
+  * Resource/API: abort early if resource in error state
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 14 Jun 2017 07:49:59 +0200
+
+pve-ha-manager (2.0-1) unstable; urgency=medium
+
+  * rebuild for PVE 5.0 / Debian Stretch
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 13 Mar 2017 11:31:53 +0100
+
+pve-ha-manager (1.0-40) unstable; urgency=medium
+
+  * ha-simulator: allow adding service on runtime
+
+  * ha-simulator: allow deleting service via GUI
+
+  * ha-simulator: allow new service request states over gui
+
+  * ha-simulator: use JSON instead of Dumper for manager status view
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 24 Jan 2017 10:03:07 +0100
+
+pve-ha-manager (1.0-39) unstable; urgency=medium
+
+  * add setup_environment hook to CLIHandler class
+
+  * ha-simulator: fix typo s/Mode/Node/
+
+  * is_node_shutdown: check for correct systemd targets
+
+  * Simulator: fix scrolling to end of cluster log view
+
+  * Simulator: do not use cursor position to insert log
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 12 Jan 2017 13:15:08 +0100
+
+pve-ha-manager (1.0-38) unstable; urgency=medium
+
+  * update manual page
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Nov 2016 11:46:21 +0100
+
+pve-ha-manager (1.0-37) unstable; urgency=medium
+
+  * HA::Status: provide better/faster feedback
+
+  * Manager.pm: store flag to indicate successful start
+
+  * ha status: include common service attributes
+
+  * Groups.pm: add verbose_description for 'restricted'
+
+  * Resources.pm: use verbose_description for state
+
+  * pve-ha-group-node-list: add verbose_description
+
+  * ha-manager: remove 'enabled' and 'disabled' commands
+
+  * rename request state 'enabled' to 'started'
+
+  * get_pve_lock: correctly send a lock update request
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 22 Nov 2016 17:04:57 +0100
+
+pve-ha-manager (1.0-36) unstable; urgency=medium
+
+  * Resources: implement 'stopped' state
+
+  * ha-manager: remove obsolet pod content
+
+  * Fix #1189: correct spelling in fence mail
+
+  * API/Status: avoid using HA Environment
+
+  * factor out resource config check and default set code
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 15 Nov 2016 16:42:07 +0100
+
+pve-ha-manager (1.0-35) unstable; urgency=medium
+
+  * change service state to error if no recovery node is available
+
+  * cleanup backup & mounted locks after recovery (fixes #1100)
+
+  * add possibility to simulate locks from services
+
+  * don't run regression test when building the simulator package
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 15 Sep 2016 13:23:00 +0200
+
+pve-ha-manager (1.0-34) unstable; urgency=medium
+
+  * fix race condition on slow resource commands in started state
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 12 Sep 2016 13:07:05 +0200
+
+pve-ha-manager (1.0-33) unstable; urgency=medium
+
+  * relocate policy: try to avoid already failed nodes
+
+  * allow empty json status files
+
+  * more regression tests
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 22 Jul 2016 12:16:48 +0200
+
+pve-ha-manager (1.0-32) unstable; urgency=medium
+
+  * use correct verify function for ha-group-node-list
+
+  * send email on fence failure and success
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 15 Jun 2016 17:01:12 +0200
+
+pve-ha-manager (1.0-31) unstable; urgency=medium
+
+  * selcet_service_node: include all online nodes in default group
+
+  * LRM: do not count erroneous service as active
+
+  * fix relocate/restart trial count leak on service deletion
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 06 May 2016 08:26:10 +0200
+
+pve-ha-manager (1.0-30) unstable; urgency=medium
+
+  * Env: allow debug logging
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 29 Apr 2016 16:50:34 +0200
+
+pve-ha-manager (1.0-29) unstable; urgency=medium
+
+  * Resources: deny setting nonexistent group
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 20 Apr 2016 18:22:28 +0200
+
+pve-ha-manager (1.0-28) unstable; urgency=medium
+
+  * Config: add get_service_status method
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 Apr 2016 08:41:22 +0200
+
+pve-ha-manager (1.0-27) unstable; urgency=medium
+
+  * use pve-doc-generator to generate man pages
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 08 Apr 2016 08:25:07 +0200
+
+pve-ha-manager (1.0-26) unstable; urgency=medium
+
+  * status: show added but not yet active services
+
+  * status: mark CRM as idle if no service is configured
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 15 Mar 2016 12:49:18 +0100
+
+pve-ha-manager (1.0-25) unstable; urgency=medium
+
+  * Use config_file from PVE::QemuConfig
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Mar 2016 11:50:49 +0100
+
+pve-ha-manager (1.0-24) unstable; urgency=medium
+
+  * simulator: install all virtual resources
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 02 Mar 2016 10:30:40 +0100
+
+pve-ha-manager (1.0-23) unstable; urgency=medium
+
+  * fix infinite started <=> migrate cycle
+
+  * exec_resource_agent: process error state early
+
+  * avoid out of sync command execution in LRM
+
+  * do not pass ETRY_AGAIN back to the CRM
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 24 Feb 2016 12:15:21 +0100
+
+pve-ha-manager (1.0-22) unstable; urgency=medium
+
+  * fix 'change_service_location' misuse and recovery from fencing
+
+  * add VirtFail resource and use it in new regression tests
+
+  * improve relocation policy code in manager and LRM
+
+  * improve verbosity of API status call
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 15 Feb 2016 10:57:44 +0100
+
+pve-ha-manager (1.0-21) unstable; urgency=medium
+
+  * Fix postinstall script not removing watchdog-mux.socket
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 04 Feb 2016 18:23:47 +0100
+
+pve-ha-manager (1.0-20) unstable; urgency=medium
+
+  * LRM: do not release lock on shutdown errors
+
+  * Split up resources and move them to own sub folder
+
+  * Add virtual resources for tests and simulation
+
+  * add after_fork method to HA environment and use it in LRM
+  
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Jan 2016 17:05:23 +0100
+
+pve-ha-manager (1.0-19) unstable; urgency=medium
+
+  * remove 'running' from migrate/relocate log message
+
+  * LRM: release agent lock on graceful shutdown
+
+  * LRM: release agent lock also on restart
+
+  * CRM: release lock on shutdown request
+
+  * TestHardware: correct shutdown/reboot behaviour of CRM and LRM
+
+  * resource agents: fix relocate
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Jan 2016 12:41:08 +0100
+
+pve-ha-manager (1.0-18) unstable; urgency=medium
+
+  * pve-ha-lrm.service: depend on lxc.service
+
+  * output watchdog module name if it gets loaded
+
+  * remove watchdog-mux.socket
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 12 Jan 2016 12:27:49 +0100
+
+pve-ha-manager (1.0-17) unstable; urgency=medium
+
+  * Resources.pm: use PVE::API2::LXC
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 11 Jan 2016 12:25:38 +0100
+
+pve-ha-manager (1.0-16) unstable; urgency=medium
+
+  * check_active_workers: fix typo /uuid/uid/
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Dec 2015 10:21:30 +0100
+
+pve-ha-manager (1.0-15) unstable; urgency=medium
+
+  * stop all resources on node shutdown (instead of freeze)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Dec 2015 10:33:30 +0100
+
+pve-ha-manager (1.0-14) unstable; urgency=medium
+
+  * allow to configure watchdog module in /etc/default/pve-ha-manager
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Dec 2015 11:09:47 +0100
+
+pve-ha-manager (1.0-13) unstable; urgency=medium
+
+  * HA API: Fix permissions
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 30 Oct 2015 11:16:50 +0100
+
+pve-ha-manager (1.0-12) unstable; urgency=medium
+
+  * Adding constants to gain more readability
+
+  * exec_resource_agent: return valid exit code instead of die's
+
+  * code cleanups
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Oct 2015 10:21:49 +0100
+
+pve-ha-manager (1.0-11) unstable; urgency=medium
+
+  * add workaround for bug #775
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 21 Oct 2015 08:58:41 +0200
+
+pve-ha-manager (1.0-10) unstable; urgency=medium
+
+  * better resource status check on addition and update
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 12 Oct 2015 18:26:24 +0200
+
+pve-ha-manager (1.0-9) unstable; urgency=medium
+
+  * delete node from CRM status when deleted from cluster
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Sep 2015 07:35:30 +0200
+
+pve-ha-manager (1.0-8) unstable; urgency=medium
+
+  * Use new lock domain sub instead of storage lock
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 26 Sep 2015 10:36:09 +0200
+
+pve-ha-manager (1.0-7) unstable; urgency=medium
+
+  * enhance ha-managers group commands
+
+  * vm_is_ha_managed: allow check on service state
+
+  * improve Makefile
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Sep 2015 12:17:41 +0200
+
+pve-ha-manager (1.0-6) unstable; urgency=medium
+
+  * implement bash completion for ha-manager
+
+  * implement recovery policy for services
+
+  * simulator: fix random output of manager status
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Sep 2015 12:06:12 +0200
+
+pve-ha-manager (1.0-5) unstable; urgency=medium
+
+  * Replacing hardcoded qemu commands with plugin calls
+
+  * improve error state behaviour
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Sep 2015 08:45:36 +0200
+
+pve-ha-manager (1.0-4) unstable; urgency=medium
+
+  * groups: encode nodes as hash (internally)
+
+  * add trigger for pve-api-updates
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 16 Jun 2015 09:59:03 +0200
+
+pve-ha-manager (1.0-3) unstable; urgency=medium
+
+  * CRM: do not start if there is no resource.cfg file to avoid warnings
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 09 Jun 2015 14:35:09 +0200
+
+pve-ha-manager (1.0-2) unstable; urgency=medium
+
+  * use Wants instead of Requires inside systemd service definitions
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 09 Jun 2015 09:33:24 +0200
+
+pve-ha-manager (1.0-1) unstable; urgency=medium
+
+  * enable/start crm and lrm services by default
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 05 Jun 2015 10:03:53 +0200
+
+pve-ha-manager (0.9-3) unstable; urgency=medium
+
+  * regression test improvements
+  
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 10 Apr 2015 06:53:23 +0200
+
+pve-ha-manager (0.9-2) unstable; urgency=medium
+
+  * issue warning if ha group does not exist
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 07 Apr 2015 09:52:07 +0200
+
+pve-ha-manager (0.9-1) unstable; urgency=medium
+
+  * rename vm resource prefix: pvevm: => vm:
+
+  * add API to query ha status
+
+  * allow to use simply VMIDs as resource id
+
+  * finalize ha api
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 03 Apr 2015 06:18:05 +0200
+
+pve-ha-manager (0.8-2) unstable; urgency=medium
+
+  * lrm: reduce TimeoutStopSec to 95
+
+  * lrm: set systemd killmode to 'process'
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 02 Apr 2015 08:48:24 +0200
+
+pve-ha-manager (0.8-1) unstable; urgency=medium
+
+  * currecrtly send cfs lock update request
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 02 Apr 2015 08:18:00 +0200
+
+pve-ha-manager (0.7-1) unstable; urgency=medium
+
+  * create /etc/pve/ha automatically
+
+  * use correct package for lock_ha_config
+
+  * fix ha-manager status when ha is unconfigured
+
+  * do not unlink watchdog socket when started via systemd
+
+  * depend on systemd
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 01 Apr 2015 11:05:08 +0200
+
+pve-ha-manager (0.6-1) unstable; urgency=medium
+
+  * move configuration handling into PVE::HA::Config
+
+  * ha-manager status: add --verbose flag
+
+  * depend on qemu-server
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 27 Mar 2015 12:28:50 +0100
+
+pve-ha-manager (0.5-1) unstable; urgency=medium
+
+  * implement service migration
+
+  * fix service dependencies (allow restart, reboot)
+
+  * freeze services during reboot/restart
+  
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 26 Mar 2015 13:22:58 +0100
+
+pve-ha-manager (0.4-1) unstable; urgency=medium
+
+  * increase fence_delay to 60 seconds
+
+  * fix regression test environment
+
+  * fix failover after master crash with pending fence action
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 25 Mar 2015 13:59:28 +0100
+
+pve-ha-manager (0.3-1) unstable; urgency=medium
+
+  * really activate softdog
+
+  * correctly count active services
+
+  * implement fence_delay to avoid immediate fencing
+
+  * pve-ha-simulator: reset watchdog with poweroff
+
+  * pve-ha-simulator: use option nofailback for default groups
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Mar 2015 13:03:23 +0100
+
+pve-ha-manager (0.2-1) unstable; urgency=medium
+
+  * add ha-manager command line tool
+
+  * start implementing resources and groups API
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 13 Mar 2015 09:26:12 +0100
+
+pve-ha-manager (0.1-1) unstable; urgency=low
+
+  * first package
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Feb 2015 11:30:21 +0100
+

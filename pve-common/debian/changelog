@@ -1,0 +1,3238 @@
+libpve-common-perl (9.2.13) trixie; urgency=medium
+
+  * cmd: run: do not wait indefinitely for a killed command to exit, for
+    example one stuck on unresponsive storage, so that the timeout of the
+    caller still applies, like the one of cluster file system locks.
+
+  * network: interfaces: store the VRF as interface-wide setting, so that
+    removing the IPv4 configuration of an interface no longer drops it.
+    Writing the configuration now fails if a bridge port, bond slave, OVS port
+    or OVS bond has a VRF set, as none of them can be in a VRF.
+
+  * network: interfaces: add the ip-forward option, for example for the
+    uplinks of SDN zones with a dedicated VRF, which need IPv4 forwarding.
+    Only values that ifupdown2 accepts are interpreted, and bridge ports
+    cannot have it.
+
+  * section config: reject line feeds in items of array properties. Such an
+    item ended the section when writing the config, so the following lines of
+    the section were lost when reading it again.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Nov 2026 05:43:49 +0100
+
+libpve-common-perl (9.2.12) trixie; urgency=medium
+
+  * json schema: mark the API token of a remote endpoint, as used for remote
+    migration, as sensitive. Tools that mask sensitive API parameters, for
+    example in logs, can then keep the secret of the token out of their output.
+
+  * inotify: add a reader for resolv.conf that returns all domains of the
+    'search' line, for the DNS API of a node. The existing reader keeps
+    returning only the first domain, as the handling of the node certificate
+    relies on that.
+
+  * tools: file locks:
+    - allow running code under a file lock only if the lock is free, without
+      waiting for it. This is for code that the holder of the lock can be
+      waiting for, like the post-stop hook of a container, which needs the
+      config lock of its guest.
+    - add a helper that lets a forked process close the file locks it inherited
+      from its parent. Such a process kept a lock held until it exited, also
+      after the parent had released it. For example, the ID of a destroyed VM
+      stayed locked while a worker was still wiping its disk on an LVM storage
+      with 'saferemove' enabled.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Nov 2026 16:12:57 +0100
+
+libpve-common-perl (9.2.11) trixie; urgency=medium
+
+  * cli: list options that depend on a type, like those of the HA rules, once
+    with the types they apply to, instead of repeating them for every type.
+
+  * cli help: only list the options of one type if the arguments selecting it
+    follow the command, for example 'ha-manager help rules add node-affinity'.
+
+  * cli: fix parsing an option as flag if another type has a flag of that
+    name and the type is derived from other parameters, like for 'pvesm set'.
+
+  * section config: fixes for configs where plugins isolate their properties:
+    keep the properties of the other plugins optional in the schema, let an
+    isolating plugin require a property that is declared as optional, and
+    keep a required common property if a plugin lists it.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Nov 2026 21:41:46 +0100
+
+libpve-common-perl (9.2.10) trixie; urgency=medium
+
+  * cmd run: keep a pending alarm of the caller armed with the time it has
+    left, instead of canceling or delaying it. Cluster-wide locks limit how
+    long they are held through such an alarm, so only the first command run
+    under a lock was limited, for example 'vgs' but not the following
+    'lvcreate' on shared LVM.
+
+  * cmd run: kill the command if the run gets aborted from outside, like by
+    the timeout of a lock. Before, the operation failed and released the lock
+    while its command kept running, for example an 'rbd create' on a pool
+        whose placement groups never become active.
+
+  * json schema: add a 'sensitive' flag to mark properties that hold secrets,
+    like passwords or API tokens, and helpers to replace such values in the
+    raw text of key/value and section config files. Only the sensitive keys
+    of a property string get replaced, and invalid lines are kept as is. This
+    allows other packages to redact secrets where configs reach a wider
+    audience, like in the system report.
+
+  * json schema: add a 'multiline' keyword as a hint for clients that a string
+    can span multiple lines, so its newlines must not be folded or replaced.
+    The keyword does not affect validation.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 15 Nov 2026 22:32:14 +0100
+
+libpve-common-perl (9.2.9) trixie; urgency=medium
+
+  * rest handler: honor the 'type-property' of the parameter schema when
+    resolving the type of a request, instead of always assuming 'type'.
+
+  * daemon: only pass the PID lock on when the daemon re-executes itself.
+    Commands started by a daemon inherited the lock and, if they outlived the
+    daemon, made a restart fail with 'daemon already started'.
+
+  * fix #8288: file: treat a process that exits while its /proc entry is being
+    read as not running, instead of failing. On boot, this could abort the
+    start of all guests, so that guests of later startup orders stayed stopped.
+
+  * network: interfaces: convert carriage returns in interface comments to
+    newlines when writing the configuration. ifupdown2 reads a standalone
+    carriage return as a line break, which allowed injecting configuration
+    lines through a comment.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 12 Nov 2026 23:58:17 +0100
+
+libpve-common-perl (9.2.8) trixie; urgency=medium
+
+  * network: interfaces: add guard for substitution in bond slaves property,
+    avoiding a perl warning
+
+  * fix #5978: pem parser: relax parsing of chain entries to allow additional
+    information before each chain element, not just for the chain itself, and
+    add tests covering the parsing and splitting implementation
+
+  * fix #6305: cli formatter: avoid encoding YAML output twice, which broke
+    output with special characeters
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 05 Nov 2026 14:14:09 +0100
+
+libpve-common-perl (9.2.7) trixie; urgency=medium
+
+  * rest environment: start each worker task with a clean warning count.
+    Tasks forked after a plain API request that logged a warning in the same
+    process ended with a WARNINGS status, although nothing in their own log
+    warned.
+
+  * tools: add helpers to compare version numbers and to check for a minimum
+    Proxmox VE version, moved over from qemu-server so that other packages can
+    use them too.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 02 Nov 2026 23:45:58 +0100
+
+libpve-common-perl (9.2.6) trixie; urgency=medium
+
+  * ticket: reject old authentication tickets with unexpected percent escapes,
+    which could resolve to a different user name. Affected users need to log
+    in again.
+
+  * certificate: add helpers to read the validity period and calculate an ACME
+    renewal lead time from it, enabling support for shorter-lived certificates.
+    Use one third of the lifetime, or half for certificates valid for less than
+    ten days, with a three-day minimum to allow retries.
+
+  * command execution: add a helper to build SSH commands with shell-quoted
+    remote arguments and an explicit end to SSH options, preserving spaces and
+    special characters in remote arguments.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 27 Oct 2026 20:26:59 +0100
+
+libpve-common-perl (9.2.5) trixie; urgency=medium
+
+  * network interfaces: accept the 'bond-ports' and 'bridge-trunk' aliases that
+    ifupdown2 supports for 'bond-slaves' and 'bridge-vids'. Before, a bond set
+    up with 'bond-ports' showed up without any ports, and saving the
+    configuration added a conflicting 'bond-slaves none' or default
+    'bridge-vids' line. Saving now writes the canonical option names instead.
+
+  * ticket: also escape the percent sign when embedding data, like the user
+    name, into an authentication ticket. Before, a user name containing a '%'
+    followed by two hexadecimal digits was decoded into a different user name
+    when the ticket got verified.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 23 Oct 2026 19:45:49 +0200
+
+libpve-common-perl (9.2.4) trixie; urgency=medium
+
+  * iproute2: speed up finding the physical ports of a bridge, and add a helper
+    to map all bridges to their ports at once. This allows SDN to compute them
+    a single time when applying VLAN or QinQ zones on a non-VLAN-aware bridge,
+    instead of once for every VNet, which got slow with many VNets.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 19 Oct 2026 22:29:37 +0200
+
+libpve-common-perl (9.2.3) trixie; urgency=medium
+
+  * proc stat: drop the 'sum' field from the host CPU statistics, for example
+    as sent to external metric servers, as it was never set and always zero.
+
+  * tools: add helper to open a file only if its path resolves beneath a given
+    directory, rejecting any escape through '..' components or symbolic links.
+
+  * tools: explicitly disallow resolving magic links, like those in /proc, when
+    opening a file within a root directory, instead of relying on the current
+    kernel default.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 03 Oct 2026 18:50:00 +0200
+
+libpve-common-perl (9.2.2) trixie; urgency=medium
+
+  * schema: improve handling of (trailing) newlines in values
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 11 Sep 2026 14:48:01 +0200
+
+libpve-common-perl (9.2.1) trixie; urgency=medium
+
+  * procfs: derive the CPU model on arm64 from the implementer and part.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 04 Aug 2026 12:42:18 +0200
+
+libpve-common-perl (9.1.21) trixie; urgency=medium
+
+  * section config: generate a proper 'oneOf' schema for configs using property
+    isolation, replacing the deprecated conditional-property form:
+    - every section type contributes its own variant, so a plugin's required
+      properties stay required in its own schema instead of being forced to be
+      optional across the whole config.
+    - the 'type' property is part of the schema and thus mandatory, also for
+      update calls, which is a change for any config moving to isolation. API
+      methods can set the new 'resolve_type' callback to derive it from the
+      remaining parameters, so that existing clients which omit it keep
+      working.
+    - plugins can now opt into isolation individually through the new
+      'isolate-properties' plugin data flag, and keep their properties usable
+      by other, non-isolated plugins through 'expose-properties'. This allows
+      moving type-specific properties out of a shared list without breaking
+      third party plugins.
+
+  * section config: choose property isolation through 'propertyIsolation' in
+    the base plugin's private data, as this belongs to the plugin architecture
+    rather than to whoever calls init(). Passing 'property_isolation' to init()
+    is deprecated.
+
+  * rest handler: support 'allOf' and 'oneOf' parameter schemas when parsing
+    command line options, rendering usage strings, completing options and
+    dumping the API, so that CLI tools and the API viewer work with the new
+    section config schemas.
+
+  * section config: allow init() to be called more than once per process, it
+    used to read back its own output and reject it, which two modules
+    initializing the same config would run into.
+
+  * json schema: fix the optionality check for the deprecated per-property
+    'instance-types', which kept such a property mandatory for section types it
+    does not even belong to.
+
+  * tools: add a helper that returns the host's Debian architecture (amd64,
+    arm64, ...), distinct from the uname-based CPU name, so that dependent
+    packages can select architecture-specific behavior using the same value
+    that dpkg and the package repositories use.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 02 Aug 2026 16:46:04 +0200
+
+libpve-common-perl (9.1.20) trixie; urgency=medium
+
+  * json schema: fix an issue with legacy oneOf schemas not validating
+    successfully anymore
+
+  * json schema: fix alias remapping in oneOf variants
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 30 Jul 2026 17:37:34 +0200
+
+libpve-common-perl (9.1.19) trixie; urgency=medium
+
+  * json schema: add support for composing and discriminating object schemas:
+    - add 'allOf', which validates a value against a list of object schemas at
+      once, so a parameter set composed from several distinct schemas can be
+      expressed explicitly instead of merging the schemas by hand.
+    - add a strict, object-like 'oneOf' that selects the variant to validate
+      through a dedicated type property, declared by the new
+      'type-property-schema' and a per-variant 'instance-type'. The previous
+      'oneOf' handling was really a conditional-property mechanism and not a
+      variant selection, so its use with 'type-property' and 'instance-types'
+      is now deprecated.
+    - drop support for the 'extends' and 'disallow' keywords, which were
+      unused here and have been removed from the official JSON schema
+      specification.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Jul 2026 16:54:50 +0200
+
+libpve-common-perl (9.1.18) trixie; urgency=medium
+
+  * section config: drop unusable global properties from update schema
+
+  * syscall, tools: add openat2 syscall, and its RESOLVE_ constants
+
+  * tools: add open_in_root helper to open files *as if* chrooted() into
+    another directory
+
+  * syscall, tools: add setresgid() syscall
+
+  * tools: add RESOLVE_* and RENAME_* flags to EXPORT_OK
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Jul 2026 09:18:25 +0200
+
+libpve-common-perl (9.1.17) trixie; urgency=medium
+
+  * continue with the refactor and split the big Tools and INotify modules in
+    a backward compatible manner, introducing a PVE::Cmd module, a
+    PVE::ParseUtils module and PVE::Network::Interfaces module, avoiding
+    circular dependencies and pulling in a huge amount of (transitive)
+    dependencies when one just wants to use one of our simple utility
+    functions.
+
+  * ldap: escape the user-provided user name when using it in the LDAP search
+    filter that looks up the user DN.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 14 Jul 2026 08:52:13 +0200
+
+libpve-common-perl (9.1.16) trixie; urgency=medium
+
+  * pbs client: keep the original line order when surfacing a multi-line
+    proxmox-backup-client error, instead of moving its last line to the front
+    and leaving a dangling 'Caused by:'.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 10 Jun 2026 19:03:20 +0200
+
+libpve-common-perl (9.1.15) trixie; urgency=medium
+
+  * pbs client: surface the full error output of failed proxmox-backup-client
+    commands, so callers see the actual cause, like a certificate fingerprint
+    mismatch, instead of only a terse connect error.
+
+  * json schema: display the actual per-alternative error messages when a
+    oneOf schema check fails, instead of empty strings.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 09 Jun 2026 23:53:21 +0200
+
+libpve-common-perl (9.1.14) trixie; urgency=medium
+
+  * pbs-client: rename an existing encryption key before auto-generating a new
+    one, matching the behavior of the storage plugin.
+
+  * pbs-client: add support for a master public key, to embed a master-key
+    encrypted copy of the data encryption key into each backup for recovery.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 05 Jun 2026 08:54:58 +0200
+
+libpve-common-perl (9.1.13) trixie; urgency=medium
+
+  * json schema: register a 'pve-node-location' format so the datacenter and
+    per-node geographic location property string share a single definition.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 24 May 2026 01:32:24 +0200
+
+libpve-common-perl (9.1.12) trixie; urgency=medium
+
+  * pbs-client: add support for the 'server-identity' command, which allows
+    retrieving a unique identifier for a Proxmox Backup Server instance.
+
+  * sysfs tools: add 'physfn' and 'virtfns' fields to verbose 'lspci' output,
+    exposing SR-IOV physical/virtual function relationships, useful e.g. for
+    displaying related devices like vGPU instances together.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 13 May 2026 01:03:53 +0200
+
+libpve-common-perl (9.1.11) trixie; urgency=medium
+
+  * ticket: support encoding and verifying port for spice tickets as a
+    defense-in-depth measure.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Apr 2026 20:02:06 +0200
+
+libpve-common-perl (9.1.10) trixie; urgency=medium
+
+  * syscall: add wrappers for seccomp, write, exit, exit_group and brk.
+
+  * add new PVE::Seccomp module with helpers for generating simple BPF
+    programs for seccomp filtering.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Apr 2026 17:34:17 +0200
+
+libpve-common-perl (9.1.9) trixie; urgency=medium
+
+  * tools: export O_CLOEXEC constant.
+
+  * syscall, tools: add flags and wrapper for the mount_setattr syscall.
+
+  * various schema improvements w.r.t. alias handling:
+    - fix alias handling for API parameters (check_object) — aliased keys were
+      not remapped to their canonical name, so backend code reading the
+      canonical key got undef.
+    - fix alias conflict in property strings silently letting the second value
+      win when both a key and its alias target are set.
+    - make alias entries implicitly optional for objects, allowing bare
+     '{ alias => 'target' }' declarations without redundant type and optional
+     properties. This was already allowed for the property-string
+     micro-format.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 26 Mar 2026 23:31:00 +0100
+
+libpve-common-perl (9.1.8) trixie; urgency=medium
+
+  * timezone: add systemd/timedatectl helpers to PVE::Systemd, as usage of
+    '/etc/timezone' is deprecated by tzdata maintainers. The INotify-based
+    timezone functions are marked as deprecated accordingly.
+
+  * procfs tools: meminfo: gracefully handle KSM info not being readable, as
+    can happen in restricted build environments like sbuild, which caused
+    dependent package builds (e.g. pmg-api) to fail.
+
+  * file: add file_exists and file_get_size helpers to PVE::File, which are
+    easier to mock in tests than Perl's native -f and -s file test operators.
+
+  * procfs tools: switch from PVE::Tools to the leaner PVE::File module to
+    reduce the dependency footprint.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Mar 2026 22:46:37 +0100
+
+libpve-common-perl (9.1.7) trixie; urgency=medium
+
+  * tools: add mknodat syscall wrapper and use it for the legacy mknod helper,
+    for better portability.
+
+  * fix #7077: improve error message for IDs shorter than 2 characters.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 21 Jan 2026 19:03:39 +0100
+
+libpve-common-perl (9.1.6) trixie; urgency=medium
+
+  * procfs tools: cpuinfo: also return CPU vendor and family.
+
+  * rest handler: map path to methods: avoid returning misleading 'internal
+    error' for methods that are not implemented. Those are already correctly
+    handled on an upper level.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 20 Jan 2026 16:12:32 +0100
+
+libpve-common-perl (9.1.5) trixie; urgency=medium
+
+  * tools: add fchmodat syscall
+
+  * sectionconfig: remove unused variable in get_property_schema()
+
+  * sectionconfig: add tests for schema generation
+
+  * sectionconfig: improve documentation
+
+  * build: add missing (test) dependencies
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 15 Jan 2026 13:48:04 +0100
+
+libpve-common-perl (9.1.4) trixie; urgency=medium
+
+  * fix #7193: allow vlan-interfaces as physical bridge ports.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 31 Dec 2025 08:00:21 +0100
+
+libpve-common-perl (9.1.3) trixie; urgency=medium
+
+  * fix #7153: iproute2: consider bonds as physical bridge ports.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 17 Dec 2025 22:18:28 +0100
+
+libpve-common-perl (9.1.2) trixie; urgency=medium
+
+  * systemd: enter scope: allow specifying 'Before' and 'After' properties
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 17 Dec 2025 15:06:13 +0100
+
+libpve-common-perl (9.1.1) trixie; urgency=medium
+
+  * fix #7118: fix bridge port detection when plugging netdev with vlan.
+
+  * iproute2: add helpers for detecting vlan-aware bridges.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 10 Dec 2025 20:24:49 +0100
+
+libpve-common-perl (9.1.0) trixie; urgency=medium
+
+  * CLI usage: never show aliases as required argument.
+
+  * CLI usage and synopsis: re-use optional-flag from target for aliases to
+    avoid to potentially generate wrong documentation.
+
+  * CLI usage: rework output for aliased args, make it more concise.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Nov 2025 12:45:11 +0100
+
+libpve-common-perl (9.0.15) trixie; urgency=medium
+
+  * JSON schema: make new expose_credentials flag available for API
+    endpoints that want to manual proxy to other nodes without having to
+    mark them as protected.
+
+  * rest environment: add getter and setter for credentials to allow accessing
+    the exact credentials uses for an API request.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Nov 2025 17:38:52 +0100
+
+libpve-common-perl (9.0.14) trixie; urgency=medium
+
+  * iproute2: add helper for detecting bridge members.
+
+  * iproute2: add helper for querying vlan information.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Nov 2025 01:29:38 +0100
+
+libpve-common-perl (9.0.13) trixie; urgency=medium
+
+  * file: add missing use statement for encode method that caused failure when
+    the caller tried to force utf8 output.
+
+  * file: file_copy, file_get_contents: fix fallback values for optional
+    parameters in signature.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 05 Nov 2025 13:15:14 +0100
+
+libpve-common-perl (9.0.12) trixie; urgency=medium
+
+  * JSONSchema: correctly parse booleans in the form of a default_key when
+    parsing a property string to make the behavior consistent when the same
+    key is set explicitly.
+
+  * Split out some specific code from the overly generic PVE::Tools module to
+    dedicated perl modules in a backward compatible manner. The new modules
+    are:
+    - PVE::UPID for (task worker) UPID parsing and task log status helper.
+    - PVE::IPRoute2 for thin wrapper around calling the `ip` tool.
+    - PVE::File for simple file reading and writing methods.
+
+  * fix #6762: CLI helper: fix copying of property schema to avoid outputting
+    a "Can't use an undefined value as a HASH reference" warning.
+
+  * systemd: add notify() helper, which is a pure Perl reimplementation of
+    systemd's sd_notify() mechanism.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 03 Nov 2025 11:29:58 +0100
+
+libpve-common-perl (9.0.11) trixie; urgency=medium
+
+  * procfs meminfo: return min/max ZFS ARC size
+
+  * pty: introduce read_line() function.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Sep 2025 20:23:54 +0200
+
+libpve-common-perl (9.0.10) trixie; urgency=medium
+
+  * network interfaces: fall back to legacy PHYSICAL_NIC_RE just to be sure.
+
+  * network parser: interfaces: also set type 'bridge' for empty bridges.
+
+  * prepare fix for #6656: cli handler: generate anchors for all
+    (sub-)commands.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 05 Sep 2025 20:48:27 +0200
+
+libpve-common-perl (9.0.9) trixie; urgency=medium
+
+  * schema: support sizes with verbose suffixes {K, M, G, T}iB.
+
+  * use absolute path when reading PSI from sysfs to avoid spurious warnings.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 31 Jul 2025 12:07:14 +0200
+
+libpve-common-perl (9.0.8) trixie; urgency=medium
+
+  * schema: clarify error message for missing property dependency.
+
+  * inotify/interfaces: use ip link for detecting physical interfaces and
+    avoid restriction to only recognizing interfaces following a specific
+    naming pattern.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Jul 2025 20:17:13 +0200
+
+libpve-common-perl (9.0.7) trixie; urgency=medium
+
+  * interfaces: make parser aware of interface alternative names to avoid
+    duplicate entries if the /e/n/i config used an altname while the parser
+    still checked for only the primary one.
+
+  * network: add 'if' prefix to the regex heuristic to detect physical network
+    interfaces.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Jul 2025 17:01:35 +0200
+
+libpve-common-perl (9.0.6) trixie; urgency=medium
+
+  * tools: dump logfile: fix result type in case the file cannot be opened to
+    ensure user can see the error message.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Jul 2025 20:33:08 +0200
+
+libpve-common-perl (9.0.5) trixie; urgency=medium
+
+  * add function to retrieve pressures stall information from a cgroup.
+
+  * fix parsing pressure stall information.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Jul 2025 21:05:03 +0200
+
+libpve-common-perl (9.0.4) trixie; urgency=medium
+
+  * network: add 'nic' prefix to the regex heuristic to detect physical
+    network interfaces.
+
+  * network: add helpers to get`ip link` and `ip altname` information.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Jul 2025 16:52:13 +0200
+
+libpve-common-perl (9.0.3) trixie; urgency=medium
+
+  * sysfs tools: make normalize_pci_id helper method public.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 10 Jul 2025 13:20:52 +0200
+
+libpve-common-perl (9.0.2) trixie; urgency=medium
+
+  * network: add helper for checking if a interface is a ovs/linux bridge
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Jul 2025 14:32:42 +0200
+
+libpve-common-perl (9.0.1) trixie; urgency=medium
+
+  * schema: parse property string: support skipping keys
+
+  * schema: add helper to convert to JSON boolean
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Jun 2025 13:44:19 +0200
+
+libpve-common-perl (9.0.0) trixie; urgency=medium
+
+  * re-build for Debian 13 "Trixie" based releases.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 01 Jun 2025 15:42:06 +0200
+
+libpve-common-perl (8.3.1) bookworm; urgency=medium
+
+  * memory info: use the MemAvailable field from /proc/meminfo to compute used
+    memory to fix overestimation of that metric and to better align with what
+    modern versions of tools like `free` do.
+
+  * tools: upid decode: do not allow slashes in UPIDs.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Apr 2025 21:29:49 +0200
+
+libpve-common-perl (8.3.0) bookworm; urgency=medium
+
+  * sysfs tools: add 'nvidia' -> 'mdev' workaround to pci_device_info
+
+  * fix #5876: systemd: actively disconnect signals once handled to avoid
+    running into dbus default limit of 512 connections.
+
+  * kernel syscall: expose fallocate syscall
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 02 Apr 2025 20:00:52 +0200
+
+libpve-common-perl (8.2.9) bookworm; urgency=medium
+
+  * tools: run fork: allow running code in parent after fork
+
+  * tools: download file: add a verification callback to allow the call-site
+    to make context-specific assertions about the file content while it was
+    not yet copied to the target storage.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Nov 2024 15:44:41 +0100
+
+libpve-common-perl (8.2.8) bookworm; urgency=medium
+
+  * Revert "section config: make subroutine `delete_from_config` private"
+
+  * network: tap plug: add support for bridge port isolation, blocking all
+    traffic between ports with the isolation flag while still allowing traffic
+    with uplink ports of the bridge.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 12 Nov 2024 17:05:01 +0100
+
+libpve-common-perl (8.2.7) bookworm; urgency=medium
+
+  * fix #5623: OVS: avoid that config options set explicitly to `0` are
+    ignored.
+
+  * network config: drop warning for having a `vmbrX` interface that isn't a
+    bridge to avoid a cyclic use statement for this unlikely edge-case.
+
+  * sysfs tools: log full error if writing to a control file fails
+
+  * sysfs tools: fix regression on binding to vfio-pci when there are multiple
+    devices of the same (vendor-id, model-id) tuple, like with multiple GPUs
+    that have the same audio chip by allowing to ignore a "already existing"
+    error.
+
+  * network config: check if 'bridge_vids' property is not just an empty
+    string.
+
+  * partiually fix #3893: network: add formats for passing a VLAN id or range
+    parameter.
+
+  * fix #5454: net: assert names for vlan bridge slave interfaces are valid
+
+  * net: assert validity of names also when creating bridge and veth interfaces
+
+  * REST environment: also log warning messages to syslog
+
+  * pbs client: various code cleanups and refactoring
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 11 Nov 2024 20:29:21 +0100
+
+libpve-common-perl (8.2.6) bookworm; urgency=medium
+
+  * sysfs tools: properly catch errors when updating kernel/module parameters
+    at runtime.
+
+  * sysfs tools: handle the modern API that the NVIDIAs vGPU provides for
+    kernel version 6.8 and newer.
+
+  * sysfs tools: always include mdev and IOMMU group information when
+    gathering info about available PCI devices
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 24 Oct 2024 18:37:46 +0200
+
+libpve-common-perl (8.2.5) bookworm; urgency=medium
+
+  * explicitly load the PerlIO base module to avoid some odd edge cases where
+    perl isn't able to do so automatically.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 19 Oct 2024 16:36:20 +0200
+
+libpve-common-perl (8.2.4) bookworm; urgency=medium
+
+  * file set contents: use syswrite instead of print to avoid chunking write
+    into 8 KiB blocks, which can increase the overhead of the write operation
+    on the underlying storage.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Oct 2024 19:02:19 +0200
+
+libpve-common-perl (8.2.3) bookworm; urgency=medium
+
+  * schema: adapt description of method's 'download' key and rename it to
+    'download_allowed' with an alias to the old name for backward
+    compatibility. This only affects our REST API endpoint and gets devs some
+    slightly better UX for what setting this flag does.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 23 Sep 2024 10:23:57 +0200
+
+libpve-common-perl (8.2.2) bookworm; urgency=medium
+
+  * tools: fix wrapper for mknod syscall
+
+  * fix #5486: add '%' to list of encoded characters for when percent-encoding
+    text to ensure the original value is correctly restored when decoding such
+    a percent-encoded string again
+
+  * fix #5529: cgroup: correctly handle changing cpu quota without a quota
+    passed
+
+  * cli: use double-hyphen as argument prefix for doc and CLI help output
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 30 Jul 2024 21:42:12 +0200
+
+libpve-common-perl (8.2.1) bookworm; urgency=medium
+
+  * interfaces: support stanzas without types/methods, like ifupdown2 supports
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 23 Apr 2024 15:42:55 +0200
+
+libpve-common-perl (8.2.0) bookworm; urgency=medium
+
+  * fix #545: interfaces: allow arbitrary bridge names in network config
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 21 Apr 2024 11:50:54 +0200
+
+libpve-common-perl (8.1.2) bookworm; urgency=medium
+
+  * remote format: improve documentation of expected API-token format
+
+  * json schema: add format description for pve-storage-id standard option
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 17 Apr 2024 21:10:32 +0200
+
+libpve-common-perl (8.1.1) bookworm; urgency=medium
+
+  * fix #5141: network parser: fix accidental RE result re-use and add tests
+
+  * network tests: switch to ifupdown2
+
+  * network parser: iterate deterministically
+
+  * schema: fixup description vs format_description in remote_format
+
+  * add PVE::Systemd::is_unit_active
+
+  * ticket: remove fallback for SHA1-base64 CSRF prevention tokens
+
+  * expose SYS_prctl
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 Mar 2024 12:03:00 +0100
+
+libpve-common-perl (8.1.0) bookworm; urgency=medium
+
+  * tools: Add mknod syscall
+
+  * tools: Add mount flag constants
+
+  * json schema: implement support for 'oneOf' schema
+
+  * section config: allow (opt-in) full property-isolation for plugins
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Nov 2023 13:04:21 +0100
+
+libpve-common-perl (8.0.10) bookworm; urgency=medium
+
+  * pbs client: add 'tar' parameter to file_restore_extract
+
+  * fix #4162: added `Auto-Submitted` header to email body
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 07 Nov 2023 08:58:23 +0100
+
+libpve-common-perl (8.0.9) bookworm; urgency=medium
+
+  * section config: fix handling unknown sections with arrays which
+    broke the jobs configuration when running 'qm destroy ID --purge'.
+
+  * tools: improve error handling for run with timeout helpers.
+
+  * tools: allow forcing UTF-8 encoding in file set contents helper.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 11 Sep 2023 13:46:15 +0200
+
+libpve-common-perl (8.0.8) bookworm; urgency=medium
+
+  * fix #4849: download file from url: add opt parameter for a decompression
+    command
+
+  * ldap: handle errors explicitly to improve user visible error messages
+
+  * section config: allow base properties for 'createSchema' and
+    'updateSchema'
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 11 Aug 2023 13:25:04 +0200
+
+libpve-common-perl (8.0.7) bookworm; urgency=medium
+
+  * schema: increase pve-config-digest maxLength to 64
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Jul 2023 11:55:39 +0200
+
+libpve-common-perl (8.0.6) bookworm; urgency=medium
+
+  * network: cope with non-existing interfaces config when getting local IPs
+
+  * run with timeout: return if timeout happened in list context
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 01 Jul 2023 19:24:06 +0200
+
+libpve-common-perl (8.0.5) bookworm; urgency=medium
+
+  * api dump: ignore proxyto_callback code refs
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 17 Jun 2023 13:58:23 +0200
+
+libpve-common-perl (8.0.4) bookworm; urgency=medium
+
+  * read firstline helper: only map ENOENT to undef, raise error otherwise
+
+  * ldap: fail authentication if DN is emptyu
+
+  * syslog: map cut-off priority level 'warn' to 'warning' as convenience, we
+    use the former in quite some places already.
+
+  * fix #4778: fix recent regression with boolean type check for JSON
+    parameters over the API
+
+  * schema: explicitly set min/max for VMID option, which then propagates into
+    our API viewer tool, pointing our actual valid range out more prominently
+    to users and external developers.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Jun 2023 10:29:19 +0200
+
+libpve-common-perl (8.0.3) bookworm; urgency=medium
+
+  * implement array support for section configs
+
+  * drop support for the '-alist' format
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Jun 2023 13:51:34 +0200
+
+libpve-common-perl (8.0.2) bookworm; urgency=medium
+
+  * schema: add support for array parameter in api calls, cli and config
+
+  * schema: improve description of bwlimit parameter
+
+  * remove unused SysFSTools::pci_cleanup_mdev_device
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Jun 2023 13:12:18 +0200
+
+libpve-common-perl (8.0.1) bookworm; urgency=medium
+
+  * cli usage: remove extra newlines before descriptions
+
+  * d/control: record dependency on libanyevent-perl
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 May 2023 14:39:05 +0200
+
+libpve-common-perl (8.0.0) bookworm; urgency=medium
+
+  * re-build for Debian 12 Bookworm based release series
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 08 May 2023 15:12:53 +0200
+
+libpve-common-perl (7.4-1) bullseye; urgency=medium
+
+  * REST & CLI handler: minimize scope of no-strict-refs exemption
+
+  * cert: fix invalid CSR version
+
+  * partially fix #1454: meminfo: also return arcsize
+
+  * cgroup: allow one to set the memory.high CGv2 knob too
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 26 Apr 2023 12:23:26 +0200
+
+libpve-common-perl (7.3-4) bullseye; urgency=medium
+
+  * fix #4615: REST environment: improve AnyEvent detectíon in child cleanup
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 27 Mar 2023 10:36:41 +0200
+
+libpve-common-perl (7.3-3) bullseye; urgency=medium
+
+  * fix #4299: network: check the interface specific sysfs path to detect if
+    IPv6 is disabled, as the global one might be available either way
+
+  * certificate: add helper to check if cert and key match
+
+  * API REST environment: postpone worker process collection on SIGCHLD if
+    it's likely that the process runs in an AnyEvent loop to avoid a race
+    resulting in failure to update the active task list
+
+  * section config: add helper for deleting keys from a entry
+
+  * certificate: actually print openssl errors
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Mar 2023 16:35:39 +0100
+
+libpve-common-perl (7.3-2) bullseye; urgency=medium
+
+  * fix #4299: check full path to 'disable_ipv6' file in case ipv6 is disabled
+    but the directory for it exists
+
+  * add callback based filtering for dump_logfile and add a stateful variant
+    usable for multiple files via handles
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 27 Jan 2023 10:28:32 +0100
+
+libpve-common-perl (7.3-1) bullseye; urgency=medium
+
+  * network: fix learning-on check for adding and deleting FDB entries
+
+  * dump logfile: return whole log file if `limit` parameter is `0`
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 24 Nov 2022 17:12:56 +0100
+
+libpve-common-perl (7.2-8) bullseye; urgency=medium
+
+  * pbs client: use 25s timeout and add extra-params
+
+  * network: support adding fdb directly in tap_plug
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 20 Nov 2022 16:26:19 +0100
+
+libpve-common-perl (7.2-7) bullseye; urgency=medium
+
+  * job registry: avoid injecting the section id unconditionally in
+    configs
+
+  * network: tap plug: auto-disable learning if `bridge-disable-mac-
+    learning` option is set on the underlying Linux bridge; modern VM/CT
+    management stack adds the MAC then manually to the forwarding DB (FDB) on
+    start or (migration-)resume.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 13 Nov 2022 15:53:53 +0100
+
+libpve-common-perl (7.2-6) bullseye; urgency=medium
+
+  * section config: optionally support unknown types so that a local plugin
+    can edit their own entries without needing to understand all possible
+    types in a configuration backed by the section config format.
+
+  * move the scheduled job base config & registry over from pve-manager as
+    PVE::Job::Registry for better reuse
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 12 Nov 2022 16:04:59 +0100
+
+libpve-common-perl (7.2-5) bullseye; urgency=medium
+
+  * schema: take over 'pve-targetstorage' option
+
+  * cgroup: change cpu shares: drop ignored $cgroupv1_default parameter
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Nov 2022 16:05:10 +0100
+
+libpve-common-perl (7.2-4) bullseye; urgency=medium
+
+  * pbs client: drop namespace parameter in backup_fs_tree
+
+  * pbs client: deprecate explicit namespace parameters in favor of requiring
+    it to be configured on instantiation
+
+  * pbs client: use the configured namespace as default instead of the root
+    namespace where the namespace parameter is optional
+
+  * pbs client: suppress meaningless "data: null" output when removing snapshots
+
+  * pbs client: do not consider deleting a non-existent password an error
+
+  * cgroup: move get_cpuunits helper from qemu-server as clamp_cpu_shares
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 04 Nov 2022 14:06:28 +0100
+
+libpve-common-perl (7.2-3) bullseye; urgency=medium
+
+  * proc fs tools: handle proc/stat without guest values
+
+  * sysfs: get name from mediated device types, if any
+
+  * network: improve setting MTU of TAP devices if re-plugged on a different
+    bridge or if used with OVS
+
+  * remove PVE::Subscription and friends, replaced by common rust
+    implementation
+
+  * cgroup: get mode by checking /sys/fs/cgroup mount point
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 19 Sep 2022 11:30:30 +0200
+
+libpve-common-perl (7.2-2) bullseye; urgency=medium
+
+  * tools: use int() on all integer syscall parameters to avoid that
+    stringification leads to using the address as argument, fixing among
+    other things CT restore with custom id mappings
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 May 2022 14:01:17 +0200
+
+libpve-common-perl (7.2-1) bullseye; urgency=medium
+
+  * pbs-client: namespace support
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 12 May 2022 14:42:37 +0200
+
+libpve-common-perl (7.1-6) bullseye; urgency=medium
+
+  * json schema: allow to export print_property_string
+
+  * formatter: render duration: support autolimiting accurarcy
+
+  * SysFSTools: factor out normalizing the PCI domain
+
+  * REST handler: get property description: escape curly braces for asciidoc
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 28 Apr 2022 16:40:34 +0200
+
+libpve-common-perl (7.1-5) bullseye; urgency=medium
+
+  * network: fix default of new bridge learning flag
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Mar 2022 10:13:48 +0100
+
+libpve-common-perl (7.1-4) bullseye; urgency=medium
+
+  * REST environment: allow export of log_warn
+
+  * RESTenv: fork worker: fallback to root@pam for task log user-id
+
+  * network: add support for disabling bridge learning on tap|veth|fwln
+    ports
+
+  * inotify: add bridge-disable-mac-learning option to bridges.
+
+  * sysfs tools: allow longer pci domains
+
+  * switch to using Proxmox::RS::CalendarEvent
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Mar 2022 14:10:58 +0100
+
+libpve-common-perl (7.1-3) bullseye; urgency=medium
+
+  * add 'map_id' helper for ID maps
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Feb 2022 18:36:44 +0100
+
+libpve-common-perl (7.1-2) bullseye; urgency=medium
+
+  * calendar event: base on more capable rust implementation via perlmod
+
+  * procfs statistics:
+    + initialize all fields to 0
+    + subtract guest && guest_nice from user && nice time similar to other
+      metric tools like htop or telegraf
+    + add irq/softirq/steal to total used cpu
+    + use total of all non-idle fields to compute percentage
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 13 Jan 2022 17:13:27 +0100
+
+libpve-common-perl (7.0-14) bullseye; urgency=medium
+
+  * schema: rename 'storagepair' format to 'storage-pair'
+
+  * schema: add 'pve-bridge-id' option, format and pair
+
+  * schema: add 'proxmox-remote' format and option
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Nov 2021 12:33:48 +0100
+
+libpve-common-perl (7.0-13) bullseye; urgency=medium
+
+  * getxattr: trim the returned buffer to the correct size
+
+  * Ticket: uri-escape colons
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 10 Nov 2021 11:50:51 +0100
+
+libpve-common-perl (7.0-12) bullseye; urgency=medium
+
+  * safe_read_from: bump default size limit to 1 MiB to match pmxcfs
+
+  * cgroup: cpu quota: fix resetting period length for v1
+
+  * cgroup v2: io stats: fix parsing disk writes
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 07 Nov 2021 21:36:08 +0100
+
+libpve-common-perl (7.0-11) bullseye; urgency=medium
+
+  * tempfile: improve base path selection, use user-specific rundir if
+    available, fallback to `/tmp` if that's not the case and the process
+    doesn't run under the root UID
+
+  * tools: add set/get xattr methods to expose the syscalls with the same name
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 Oct 2021 09:35:38 +0200
+
+libpve-common-perl (7.0-10) bullseye; urgency=medium
+
+  * net: get local ip: catch any error from get_reachable_networks
+
+  * inotify: network: detect "allow-auto" as "auto" synonym
+
+  * subscription: switch verification domain over to shop.proxmox.com
+
+  * inotify: network: improve "allow-hotplug" & "auto" interaction by mapping
+    the former to the later (for now).
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 29 Sep 2021 10:01:09 +0200
+
+libpve-common-perl (7.0-9) bullseye; urgency=medium
+
+  * fix #2368: network: extend infiniband recognition in regex
+
+  * net: ip from host: avoid using an undefined variable in error message
+
+  * net: add helpers to get all reachable networks
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 18 Sep 2021 14:51:44 +0200
+
+libpve-common-perl (7.0-6) bullseye; urgency=medium
+
+  * fix #2831: never set bridge_fd to 0 with STP on
+
+  * ProcFSTools: read_proc_stat: add more cpu stats from /proc/stat
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 6 Aug 2021 13:52:37 +0200
+
+libpve-common-perl (7.0-5) bullseye; urgency=medium
+
+  * fix #3527: cgroup: drop file buffers from memory usage
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 14 Jul 2021 11:50:46 +0200
+
+libpve-common-perl (7.0-4) bullseye; urgency=medium
+
+  * tools: add upid_normalize_status_type helper
+
+  * JSON schema: add pve-task-status-type format
+
+  * fix #3153: INotify: adding comment of interface to inet6 section when this
+    is the only section
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 28 Jun 2021 14:57:20 +0200
+
+libpve-common-perl (7.0-3) bullseye; urgency=medium
+
+  * SysFSTools: add verbose flag to pci_device_info
+
+  * systemd: allow setting SendSIGKILL and TimeoutStopUSec dbus properties
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Jun 2021 12:07:55 +0200
+
+libpve-common-perl (7.0-2) bullseye; urgency=medium
+
+  * inotify: read network interfaces: add vlan-id and vlan-raw-device on dot
+    notation vlan interfaces
+
+  * network: is_ip_in_cidr: correctly handle the CIDR being a singleton range
+    (e.g. /32 for IPv4)
+
+  * network: add canonical_ip abd unique_ips helper
+
+  * tools: add download_file_from_url, upid_status_is_error and renameat2 helper
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Jun 2021 16:41:53 +0200
+
+libpve-common-perl (7.0-1) bullseye; urgency=medium
+
+  * re-build for Debian 11 Bullseye based releases
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 09 May 2021 17:29:22 +0200
+
+libpve-common-perl (6.4-3) pve pmg; urgency=medium
+
+  * daemon: explicitly bind to the general wildcard address and fall back to
+    the IPv4 one if socket creation fails, as then IPv6 is highly probable
+    disabled for the setup
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 07 May 2021 16:24:29 +0200
+
+libpve-common-perl (6.4-2) pve pmg; urgency=medium
+
+  * INotify: add support for a loopback like "dummy" interfaces type required
+    for bgp with multipath/ecmp to have a unique src ip
+
+  * REST handler: make potentially resource intensive API return validation
+    opt-in, enable it only in the CLI handler by default. It was not really
+    useful anyway, and most of the time we had false positives due to the
+    schema missing some optional property.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 26 Apr 2021 19:34:21 +0200
+
+libpve-common-perl (6.4-1) pve pmg; urgency=medium
+
+  * cli: get options: don't set optional positional params to `undef`
+
+  * JSONSchema: don't cycle-check 'download' responses
+
+  * daemon: create_reusable_socket: listen on IPv6 and IPv4
+
+  * PBS client: add file-restore helper
+
+  * allow workers to log and count warnings, providing the WARNING finish-state
+    for tasks which encounered some non-fatal problems
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 23 Apr 2021 14:59:51 +0200
+
+libpve-common-perl (6.3-5) pve pmg; urgency=medium
+
+  * network: get_local_ip_from_cidr: filter to only return unique IPs
+
+  * format: fix render_bytes with CLIFormatter
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 09 Mar 2021 08:35:04 +0100
+
+libpve-common-perl (6.3-4) pve pmg; urgency=medium
+
+  * sendmail: use more complete email regex and shellquote
+
+  * register email-or-username format
+
+  * fix #3259: always free certificate file after reading it
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Feb 2021 15:50:16 +0100
+
+libpve-common-perl (6.3-3) pve pmg; urgency=medium
+
+  * SectionConfig: parse_config: add errors to result
+
+  * extract PVE::Format from PVE::CLIFormatter for reuse
+
+  * add CGroup CPU/IO/Memory pressure stats helpers
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 08 Feb 2021 16:09:09 +0100
+
+libpve-common-perl (6.3-2) pve pmg; urgency=medium
+
+  * PBS client: add helper method to get a repository url easier
+
+  * tools: add extract_sensitive_params
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Dec 2020 16:53:17 +0100
+
+libpve-common-perl (6.3-1) pve pmg; urgency=medium
+
+  * subscription: use more specific machine repo definition for Proxmox VE and
+    Proxmox Mail Gateway, to improve co-installability of all products.
+
+  * network: ignore vlan-id if already specified by "iface.X" notation
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 27 Nov 2020 15:30:18 +0100
+
+libpve-common-perl (6.2-6) pve pmg; urgency=medium
+
+  * rest: register method: allow minus in path template parameter names
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Nov 2020 16:07:53 +0100
+
+libpve-common-perl (6.2-5) pve pmg; urgency=medium
+
+  * move over CGroup handling code for reuse
+
+  * move over Proxmox Backup Sercer client helper module for reuse
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Nov 2020 14:29:13 +0100
+
+libpve-common-perl (6.2-4) pve pmg; urgency=medium
+
+  * fix #3108: properly check IPv6 local address
+
+  * systemd: add helpers for parsing unit files
+
+  * network config parser: allow bond of bond
+
+  * ProcFSTools: add helper methods to read CPU/Memory/IO pressure metrics
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 05 Nov 2020 10:55:57 +0100
+
+libpve-common-perl (6.2-3) pve pmg; urgency=medium
+
+  * properly encode CLI tool's output when using YAML output-format via
+    YAML::XS
+
+  * fix the behavior of the sync_mountpoint helper and improve its error
+    propagation
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Sep 2020 17:33:56 +0200
+
+libpve-common-perl (6.2-2) pve pmg; urgency=medium
+
+  * sendmail helper: only send multipart if necessary
+
+  * sendmail helper: allow empty display name in "from" field
+
+  * CLI option parser: allow ommiting optional positional arguemnts, if there's
+    no ambiguity about it.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Sep 2020 10:01:03 +0200
+
+libpve-common-perl (6.2-1) pve pmg; urgency=medium
+
+  * file get contents: bump default size limit to 512k to match pmxcfs max file
+    size
+
+  * run command helper: improve performance for logging and long lines
+
+  * run command helper: fix matching of \r\n line ending
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 19 Aug 2020 12:29:06 +0200
+
+libpve-common-perl (6.1-5) pve pmg; urgency=medium
+
+  * JSONSchema: add format validator support and cleanup check_format
+
+  * sendmail: separate 'mailto' list from the rest of the parameters
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 07 Jul 2020 19:26:58 +0200
+
+libpve-common-perl (6.1-4) pve pmg; urgency=medium
+
+  * fix #2374: bridge-ports is assumed to be defined
+
+  * schema: register timezone format and add verification method
+
+  * fix #2796: debian/postinst: check for existing /etc/aliases
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 03 Jul 2020 14:16:49 +0200
+
+libpve-common-perl (6.1-3) pve pmg; urgency=medium
+
+  * network: vlan-aware bridge: fix PVID when trunks are defined
+
+  * Add total sum of physical CPU core count to CPU info used by node status
+    API call
+
+  * netowrk: always autostart bond slaves interfaces
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 08 Jun 2020 17:37:11 +0200
+
+libpve-common-perl (6.1-2) pve pmg; urgency=medium
+
+  * fix adding VLAN trunks to virtual guests NICs
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 09 May 2020 21:00:29 +0200
+
+libpve-common-perl (6.1-1) pve pmg; urgency=medium
+
+  * fix #2696: avoid 'undefined value' warning in unkown commands
+
+  * ProcFSTools: fix read_meminfo without KSM
+
+  * network: fix adding vlan tags to bridge
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 May 2020 12:14:19 +0200
+
+libpve-common-perl (6.0-20) pve pmg; urgency=medium
+
+  * network: replace system() with run_command()
+
+  * acme: split out into new package proxmox-acme-perl
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Apr 2020 10:03:53 +0200
+
+libpve-common-perl (6.0-19) pve pmg; urgency=medium
+
+  * cpuset: cgroupv2 support and cleanup/refactor
+
+  * cpuset: allow empty cpusets
+
+  * JSONSchema: add acme-plugin-format
+
+  * JSONSchema: add idmap parser and storagepair format
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 04 Apr 2020 19:55:24 +0200
+
+libpve-common-perl (6.0-18) pve pmg; urgency=medium
+
+  * ldap: add optional classes to query_users and use them to filter
+
+  * ldap: optionally save group name by attribute
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 21 Mar 2020 16:49:47 +0100
+
+libpve-common-perl (6.0-17) pve pmg; urgency=medium
+
+  * inotify: ensure backwards compatibility on interface read
+
+  * normalize cidr, address and netmask entries.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 13 Mar 2020 12:24:58 +0100
+
+libpve-common-perl (6.0-16) pve pmg; urgency=medium
+
+  * notify: fix compatibility when address and netmask got passed separately on
+    write
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 12 Mar 2020 16:15:17 +0100
+
+libpve-common-perl (6.0-15) pve pmg; urgency=medium
+
+  * inotify: read interfaces: avoid uninitialized value access
+
+  * RESTHandler getopt_usage: schema properties can be optional
+
+  * add ldap-simple-attr format from Proxmox Mailgateway for reuse
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Mar 2020 17:01:42 +0100
+
+libpve-common-perl (6.0-14) pve pmg; urgency=medium
+
+  * INotify: use 'auto' for ovs interfaces with ifupdown2
+
+  * INotify : fix OVSBond and OvsintPort order, and add more tests
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 07 Mar 2020 17:51:16 +0100
+
+libpve-common-perl (6.0-13) pve pmg; urgency=medium
+
+  * INotify: fix mtu check and add test
+
+  * INotify : check_bridge : fix bridge-ports with vlan tagged interface
+
+  * zsh-completion: Add missing "options end here flag" to compadd
+
+  * get_ip_from_hostname: check all address we get from getaddrinfo_all for non-local IP
+
+  * INotify: use cidr for address on config change
+
+  * partially fix #2618: increase maximum port for spice to 61999
+
+  * add LDAP Wrapper code from Mailgateway
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 04 Mar 2020 15:44:15 +0100
+
+libpve-common-perl (6.0-12) pve pmg; urgency=medium
+
+  * systemd: add un-/escape_unit helpers
+
+  * procfs: add check_kernel_release
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 31 Jan 2020 10:32:59 +0100
+
+libpve-common-perl (6.0-11) pve pmg; urgency=medium
+
+  * ACME: use GET-as-POST call for compatibility with new API authorization
+    requirements
+
+  * API schema: add 'allowtoken' property
+
+  * INotify network: improve vlan interface parsing
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 28 Jan 2020 11:33:21 +0100
+
+libpve-common-perl (6.0-10) pve pmg; urgency=medium
+
+  * INotify: add "bond-primary" and "ovs_mtu" option
+
+  * INotify: allow vlan tagged bridge interface on non-vlanaware bridge
+
+  * INotify: forbid ip address on bridged interface.
+
+  * generate_csr: allow to set CN explicitly
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 13 Jan 2020 17:51:58 +0100
+
+libpve-common-perl (6.0-9) pve pmg; urgency=medium
+
+  * add kernel_version helper to ProcFSTools
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 23 Nov 2019 16:15:10 +0100
+
+libpve-common-perl (6.0-8) pve pmg; urgency=medium
+
+  * fix Tools::df for big storage usage values
+
+  * ProcFSTools: include ppid in read_proc_pid_stat
+
+  * add new Kernel mount API wrappers and constants
+
+  * ysFSTools: do not assume PCI domain 0000
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 20 Nov 2019 18:43:05 +0100
+
+libpve-common-perl (6.0-7) pve pmg; urgency=medium
+
+  * cert: add fingerprint helper
+
+  * JSONSchema: add pve-tag format
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 08 Nov 2019 12:48:29 +0100
+
+libpve-common-perl (6.0-6) pve pmg; urgency=medium
+
+  * fix #2433: add new TFA-secret format and support longer secrets
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Oct 2019 08:07:29 +0100
+
+libpve-common-perl (6.0-5) pve pmg; urgency=medium
+
+  * fix #2339: Handle multiple blank lines correctly in SectionConfig
+
+  * add postinst hook to fix /etc/aliases whitespace error~
+
+  * network: add uplink-id option
+
+  * network: use 'allow-ovs' instead of 'auto' for OVSBridge to fix race
+    with the then generated systemd ifup@.service on startup
+
+  * network: handle autostart setting for OVS interfaces
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Sep 2019 16:38:39 +0200
+
+libpve-common-perl (6.0-4) pve pmg; urgency=medium
+
+  * fix #2303: detect IPs of p2p interfaces
+
+  * CLIHandler: consider all valid prefixes again for completion
+
+  * Tools: add fchownat syscall
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 17 Aug 2019 11:31:24 +0200
+
+libpve-common-perl (6.0-3) pve pmg; urgency=medium
+
+  * cert: add public key type and size to info and JSON schema
+
+  * include all available CPU flags in read_cpuinfo
+
+  * add array_intersect method
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 23 Jul 2019 09:14:58 +0200
+
+libpve-common-perl (6.0-2) pve pmg; urgency=medium
+
+  * systemd: add wait_for_unit_removed helper
+
+  * add fallback for CSRF token recognition
+
+  * use hmac_sha256 when assembling CSRF token
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Jun 2019 17:16:28 +0200
+
+libpve-common-perl (6.0-1) pve pmg; urgency=medium
+
+  * print defaulttxt as sprintf parameter
+
+  * inotify: network/interfaces: fix 'Use of uninitialized value' for netmask
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Jun 2019 20:28:56 +0200
+
+libpve-common-perl (6.0-0+2) pve pmg; urgency=medium
+
+  * fix authentication over spice client by ensuring ticket does not use an
+    undefined variable
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 May 2019 13:00:15 +0200
+
+libpve-common-perl (6.0-0+1) pve pmg; urgency=medium
+
+  * bump version for buster
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 May 2019 17:10:47 +0200
+
+libpve-common-perl (5.0-52) unstable; urgency=medium
+
+  * INotify: map address and netmask also to IP/CIDR while parsing
+    network interfaces
+
+  * print api res: always allow result to be undef if optional
+
+  * prevent adding options through autovivification in SectionConfig based
+    modules
+
+  * sort keys for stabillity when dumping config through JSONSchema
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 15 May 2019 14:14:02 +0200
+
+libpve-common-perl (5.0-51) unstable; urgency=medium
+
+  * Tools: add setresuid syscall
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 18 Apr 2019 11:04:23 +0000
+
+libpve-common-perl (5.0-50) unstable; urgency=medium
+
+  * JSONSchema: fix units of bwlimit property
+
+  * add u2f challenge accessors and request host to RESTEnvironment
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 03 Apr 2019 13:53:12 +0200
+
+libpve-common-perl (5.0-49) unstable; urgency=medium
+
+  * JSONSchema: register pve-snapshot-name here to avoid cyclic
+    dependencies
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 21 Mar 2019 12:50:26 +0100
+
+libpve-common-perl (5.0-48) unstable; urgency=medium
+
+  * JSONSchema: add 'mac-addr' standard option
+
+  * JSONSchema: Adapt MAC address format to unicast
+
+  * fix #2111: regex match for email addresses
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 14 Mar 2019 09:51:35 +0100
+
+libpve-common-perl (5.0-47) unstable; urgency=medium
+
+  * partially fix #2023: Switch to https for yubico.com API
+
+  * Fix 1891: Add zsh command completion generator
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 20 Feb 2019 12:23:56 +0100
+
+libpve-common-perl (5.0-46) unstable; urgency=medium
+
+  * add missing dependency on libhttp-daemon-perl, libhttp-manager-perl
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 11 Feb 2019 10:54:52 +0100
+
+libpve-common-perl (5.0-45) unstable; urgency=medium
+
+  * Tools: add fsync sycall
+
+  * Tools: add dev_t_major/minor
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 04 Feb 2019 11:43:21 +0100
+
+libpve-common-perl (5.0-44) unstable; urgency=medium
+
+  * JSONSchema: Add format for MAC address verification
+
+  * fix defaults for standard_output_options
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 22 Jan 2019 11:51:59 +0100
+
+libpve-common-perl (5.0-43) unstable; urgency=medium
+
+  * fix #1956: return controlling terminal to parent
+
+  * Tools: cope with '0' in split_list
+
+  * network: fix setting MTU on veth pair
+
+  * SysFSTools: add helpers for mediated PCI devices
+
+  * SysFSTools: allow one to return verbose information from lspci
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Nov 2018 11:19:46 +0100
+
+libpve-common-perl (5.0-42) unstable; urgency=medium
+
+  * fix #1548: replace perl use vars with our
+
+  * introduce SysFSTools
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 19 Nov 2018 13:45:54 +0100
+
+libpve-common-perl (5.0-41) unstable; urgency=medium
+
+  * fix #1938: increase filesize limit for /proc/mounts
+
+  * inotify: network/interfaces: add support for 802.1ad stacked vlans
+
+  * build: split deb target into deb and src
+
+  * fix #1963: don't do day-time related math on time stamps
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 31 Oct 2018 14:58:42 +0100
+
+libpve-common-perl (5.0-40) unstable; urgency=medium
+
+  * minor fixup for startup order code
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 25 Sep 2018 11:33:34 +0200
+
+libpve-common-perl (5.0-39) unstable; urgency=medium
+
+  * fix #1914: CLIFormatter: check also for existence of type
+
+  * generate_usage_str: do not group sub-commands
+
+  * run_fork_with_timeout: handle SIGTERM
+
+  * intoify: improve mtu/bridgebort checks
+
+  * api_dump_full: reduce enumerated options to a single one
+
+  * inotify: add methods for reading/writing /etc/hosts
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 20 Sep 2018 09:38:32 +0200
+
+libpve-common-perl (5.0-38) unstable; urgency=medium
+
+  * getopt_usage: do not display $standard_output_options
+
+  * introcude new output format 'yaml'
+
+  * PVE::CLIHandler - allow to define additional parameters for output
+    formatter
+
+  * PVE::ACME - untaint saved account data
+
+  * api dump: do not skip indexed params with only one index
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 27 Jul 2018 10:54:59 +0200
+
+libpve-common-perl (5.0-37) unstable; urgency=medium
+
+  * make CLI standard options opt-in for commands
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Jul 2018 10:47:33 +0200
+
+libpve-common-perl (5.0-36) unstable; urgency=medium
+
+  * fix #1819: fork_worker: ensure sync'ed workers control terminal
+
+  * new class to generate and format CLI output, including common render
+    methods, table borders and output formats
+
+  * add vxlan interface support
+
+  * initial ifupdown2 option support for bridge and bond interfaces
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 10 Jul 2018 13:56:37 +0200
+
+libpve-common-perl (5.0-35) unstable; urgency=medium
+
+  * replace read_password_func from cli handler with more flexible param
+    mapping
+
+  * add print_text_table and print_api_result helper
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Jun 2018 12:33:09 +0200
+
+libpve-common-perl (5.0-34) unstable; urgency=medium
+
+  * split out systemd specific code to own perl module
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 Jun 2018 12:05:54 +0200
+
+libpve-common-perl (5.0-33) unstable; urgency=medium
+
+  * only show subcommand specific usage if command incomplete
+
+  * filter out aliases when trying to expand command
+
+  * fix handling unknown commands
+
+  * add a generalized 'read and confirm password' sub
+
+  * improve bash completion
+
+  * fix getopt when invoking without arguments
+
+  * ensure errors from forked commands get returned correctly
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 14 Jun 2018 09:15:41 +0200
+
+libpve-common-perl (5.0-32) unstable; urgency=medium
+
+  * fix #1766: compare task start time numerically
+
+  * add helper to dump API with resolved references
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 May 2018 07:33:47 +0200
+
+libpve-common-perl (5.0-31) unstable; urgency=medium
+
+  * add ACME library and challenge plugins
+
+  * add Certificate helper
+
+  * untaint PVE::Tools::df() return values
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 04 May 2018 12:39:02 +0200
+
+libpve-common-perl (5.0-30) unstable; urgency=medium
+
+  * pty: fix read_password prototype
+
+  * cli: more generic interactive parameter definition
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Mar 2018 09:08:08 +0100
+
+libpve-common-perl (5.0-29) unstable; urgency=medium
+
+  * CLIHandler: fix command usage string generation
+
+  * fix #1682: handle relative years absolutely
+
+  * introduce compute_param_mapping_hash helper
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 09 Mar 2018 08:56:03 +0100
+
+libpve-common-perl (5.0-28) unstable; urgency=medium
+
+  * net: replace brctl with iproute2 calls
+
+  * schema: add bwlimit standard option and format
+
+  * schema: allow ipv6 prefix lengths up to 128
+
+  * net: remove flowid in traffic limit commands
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 19 Feb 2018 11:41:12 +0100
+
+libpve-common-perl (5.0-27) unstable; urgency=medium
+
+  * minor code updates for better reusability
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Jan 2018 15:03:12 +0100
+
+libpve-common-perl (5.0-26) unstable; urgency=medium
+
+  * support sub command structures for command line utilities
+
+  * JSONSchema: add fingerprint-sha256 standard option
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 18 Jan 2018 09:27:50 +0100
+
+libpve-common-perl (5.0-25) unstable; urgency=medium
+
+  * fix issue where 0.5MB converted to GB becomes 0
+
+  * fix issue which caused the web GUI to not show a new login window when the
+    ticket becomes invalid (eg. timed out)
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 Dec 2017 13:25:41 +0100
+
+libpve-common-perl (5.0-24) unstable; urgency=medium
+
+  * let password queries be cancelled via Ctrl+C again
+
+  * improve vnc port allocation stability
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 13 Dec 2017 15:05:05 +0100
+
+libpve-common-perl (5.0-23) unstable; urgency=medium
+
+  * added pty handling modules for upcoming pve-xtermjs package
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 04 Dec 2017 10:14:24 +0100
+
+libpve-common-perl (5.0-22) unstable; urgency=medium
+
+  * daemon: fix termination of busy workers on reload
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Nov 2017 14:22:07 +0100
+
+libpve-common-perl (5.0-21) unstable; urgency=medium
+
+  * daemon: refactor and cleanup
+
+  * daemon: don't send SIGTERM before restart on leave_children_open_on_reload
+
+  * lock_file_full: add missing trailing newline
+
+  * JSONSchema.pm - add a 'download' attribute
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 14 Nov 2017 08:01:25 +0100
+
+libpve-common-perl (5.0-20) unstable; urgency=medium
+
+  * tools: add run_fork
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Oct 2017 15:08:48 +0200
+
+libpve-common-perl (5.0-19) unstable; urgency=medium
+
+  * PVE::Subscription - new class to simplify subscription management
+
+  * ProcFSTools:read_proc_mounts: increase read size
+
+  * tools: df: handle a failing df
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Oct 2017 11:34:44 +0200
+
+libpve-common-perl (5.0-18) unstable; urgency=medium
+
+  * use double hyphens for command options in the documentation
+
+  * fix an issue with signal handlers being replaced leading to services not
+    shutting down properly
+
+  * tools: add `convert_size` for generic byte conversion
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 12 Sep 2017 13:40:53 +0200
+
+libpve-common-perl (5.0-17) unstable; urgency=medium
+
+  * api: fix rendering of filepath/string parameters
+
+  * tools: add pipe_socket_to_command
+
+  * JSONSchema: add parse_boolean helper
+
+  * restenv: catch broadcast_tasklist errors gracefully
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 6 Sep 2017 09:34:43 +0200
+
+libpve-common-perl (5.0-16) unstable; urgency=medium
+
+  * add helper to time-out hard blocking operations (eg. on stale NFS mounts)
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 30 Jun 2017 09:18:04 +0200
+
+libpve-common-perl (5.0-15) unstable; urgency=medium
+
+  * use more reliable checks in wait_for_vnc_port
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 27 Jun 2017 11:23:25 +0200
+
+libpve-common-perl (5.0-14) unstable; urgency=medium
+
+  * calendarevent: add the parsing error message to the format
+
+  * calendarevent: add ability to have multiple timespecs for hours and minutes
+
+  * calendarevent: trim event and check if empty
+
+  * calendarevent: check range for start also without repetition
+
+  * add and use physical NIC regexp
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Jun 2017 08:25:57 +0200
+
+libpve-common-perl (5.0-13) unstable; urgency=medium
+
+  * calendarevent: change sorting of hours and minutes to numeric
+
+  * tools: next_unused_port: use IPPROTO_TCP explicitly
+
+  * tools: unused ports: optional address parameter
+
+  * PVE::JSONSchema - add proxyto_callback property
+
+  * Revert "JSONSchema.pm: register new standard option pve-replicate
+
+  * swap raw syscall numbers with syscall.ph for easier porting
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 31 May 2017 09:06:35 +0200
+
+libpve-common-perl (5.0-12) unstable; urgency=medium
+
+  * fix #1388: cpuset: sort members numerically
+
+  * CalendarEvent.pm: implement parser/utils for systemd like calender exents
+
+  * Tools: make file-locking aware of external exception sources
+
+  * SectionConfig.pm: pass section data to format_section_header
+
+  * JSONSchema.pm: register new standard option pve-replicate
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 18 May 2017 15:43:30 +0200
+
+libpve-common-perl (5.0-11) unstable; urgency=medium
+
+  * fix decoding of array and hash CLI parameters
+
+  * add network hostname -> IP helpers
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 5 May 2017 12:39:00 +0200
+
+libpve-common-perl (5.0-10) unstable; urgency=medium
+
+  * mark decode_utf8_parameters() as depreciated
+
+  * use Encode::Locale to encode parameters read from console(getopt)
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 02 May 2017 11:52:19 +0200
+
+libpve-common-perl (5.0-9) unstable; urgency=medium
+
+  * PVE::RESTEnvironment::get_user - add $noerr parameter
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 29 Apr 2017 08:28:11 +0200
+
+libpve-common-perl (5.0-8) unstable; urgency=medium
+
+  * remove wrong (and superfluous) range check in cpusets
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 20 Apr 2017 12:29:17 +0200
+
+libpve-common-perl (5.0-7) unstable; urgency=medium
+
+  * journal: allow filtering for a specific service
+
+  * net: only disable ipv6 when creating a bridge/interface
+
+  * fix uninitialized return code in run_command
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 Apr 2017 16:07:18 +0200
+
+libpve-common-perl (5.0-6) unstable; urgency=medium
+
+  * Add utility subroutine to get the fully qualified domain name of a host
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 03 Apr 2017 11:07:47 +0200
+
+libpve-common-perl (5.0-5) unstable; urgency=medium
+
+  * PVE::Tools::encrypt_pw() - new helper
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 30 Mar 2017 17:50:44 +0200
+
+libpve-common-perl (5.0-4) unstable; urgency=medium
+
+  * OTP.pm: new class with OTP helpers
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 30 Mar 2017 17:40:11 +0200
+
+libpve-common-perl (5.0-3) unstable; urgency=medium
+
+  * Notify.pm: use Clone::clone instead of Storable::dclone
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Mar 2017 12:07:07 +0100
+
+libpve-common-perl (5.0-2) unstable; urgency=medium
+
+  * Add keeplocale parameter required by some API commands
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 13 Mar 2017 15:02:41 +0100
+
+libpve-common-perl (5.0-1) unstable; urgency=medium
+
+  * bump version for Debian Stretch
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 8 Mar 2017 10:27:09 +0100
+
+libpve-common-perl (4.0-93) unstable; urgency=medium
+
+  * SectionConfig::check_value: return bool/numbers as numeric value
+
+  * JSONSchema::check_type: return success (not value)
+
+  * RESTEnvironment->init_request: reset result_attributes
+
+  * SectionConfig: add new parameter $skip_type to createSchema()
+
+  * SectionConfig:write_config: sort options by key name
+
+  * SectionConfig: allow to get class specific updateSchema()
+
+  * (maybe) fixes #1229: fix port reservation
+
+  * Fix example to latest RestHandler
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 08 Mar 2017 06:17:44 +0100
+
+libpve-common-perl (4.0-92) unstable; urgency=medium
+
+  * stop using ifconfig from net-tools
+
+  * schema updates
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 09 Feb 2017 11:39:13 +0100
+
+libpve-common-perl (4.0-91) unstable; urgency=medium
+
+  * Fix interface writer for bridge_ports and slaves.
+
+  * ensure correct upgrade path
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 6 Feb 2017 14:45:20 +0100
+
+libpve-common-perl (4.0-90) unstable; urgency=medium
+
+  * RESTEnvironment: let check_worker take a $self
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 27 Jan 2017 10:57:13 +0100
+
+libpve-common-perl (4.0-89) unstable; urgency=medium
+
+  * fix #1232: cleanup bridges on veth_delete
+
+  * split abstract base modules into separate libpve-guest-common-perl package
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 25 Jan 2017 09:10:47 +0100
+
+libpve-common-perl (4.0-88) unstable; urgency=medium
+
+  * PVE::Ticket - new helper class to create auth tickets
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Jan 2017 12:53:08 +0100
+
+libpve-common-perl (4.0-87) unstable; urgency=medium
+
+  * RESTHandler.pm: remove register_page_formatter (no longer required)
+
+  * JSONSchema: remove formatter option
+
+  * PVE::RESTEnvironment: new base class for PVE::RPCEnvironment
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Jan 2017 09:09:15 +0100
+
+libpve-common-perl (4.0-86) unstable; urgency=medium
+
+  * CLIHandler.pm: remove calls to PVE::RPCEnvironment
+
+  * CLIHandler.pm: add setup_environment hook
+
+  * CLIHandler.pm: remove run as root restriction
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 13 Jan 2017 11:22:18 +0100
+
+libpve-common-perl (4.0-85) unstable; urgency=medium
+
+  * set 'snapshot-delete' lock when deleting snapshot
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Dec 2016 12:36:27 +0100
+
+libpve-common-perl (4.0-84) unstable; urgency=medium
+
+  * CpuSet short_string - avoid ranges like 0-0, 1-1, 2-2, ...
+
+  * CpuSet write_to_cgroup: catch errors from close()
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 21 Dec 2016 11:53:02 +0100
+
+libpve-common-perl (4.0-83) unstable; urgency=medium
+
+  * safe_read_from: add filename parameter to improve error messages
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 28 Nov 2016 07:45:43 +0100
+
+libpve-common-perl (4.0-82) unstable; urgency=medium
+
+  * cpuset: fix short_string
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Nov 2016 12:21:53 +0100
+
+libpve-common-perl (4.0-81) unstable; urgency=medium
+
+  * use better regex for remote ip check
+
+  * schema_get_type_text: do not always expand enums
+
+  * schema_get_type_text: render generic types as <type>
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 22 Nov 2016 11:50:30 +0100
+
+libpve-common-perl (4.0-80) unstable; urgency=medium
+
+  * use the pvecm mtunnel command to get remote migration ip
+
+  * Fix #1188: tempfile: use /run by default
+
+  * JSONSchema: allow named formats in parse_property_string
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Nov 2016 09:45:31 +0100
+
+libpve-common-perl (4.0-79) unstable; urgency=medium
+
+  * CpuSet: read $MAX_CPUID from /proc/cpuinfo
+
+  * CpuSet: new max_cpuid() method (replaces static class var)
+
+  * add get_local_ip_from_cidr
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Oct 2016 17:45:04 +0200
+
+libpve-common-perl (4.0-78) unstable; urgency=medium
+
+  * CpuSet: add helper to format/print cpu sets
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Oct 2016 07:04:18 +0200
+
+libpve-common-perl (4.0-77) unstable; urgency=medium
+
+  * new class PVE::CpuSet: Simply class to handle cpu sets
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 26 Oct 2016 11:16:07 +0200
+
+libpve-common-perl (4.0-76) unstable; urgency=medium
+
+  * SectionConfig: always write out explicitly set booleans
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 20 Oct 2016 06:16:21 +0200
+
+libpve-common-perl (4.0-75) unstable; urgency=medium
+
+  * correct spelling of synopsis
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 07 Oct 2016 09:02:36 +0200
+
+libpve-common-perl (4.0-74) unstable; urgency=medium
+
+  * Network: add disable_ipv6 and use it
+
+  * fix doc generator (do not convert efidisk0 to efidisk[N])
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Sep 2016 12:46:23 +0200
+
+libpve-common-perl (4.0-73) unstable; urgency=medium
+
+  * schema_get_type_text: always access values as number
+
+  * add typetext property for more complex types
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Sep 2016 08:48:18 +0200
+
+libpve-common-perl (4.0-72) unstable; urgency=medium
+
+  * allow Regexp objects for strings in the schema
+
+  * tools: optional prefix for random_ether_addr
+
+  * harden file_set_contents against symlinks attacks (thanks to
+    RACK911Labs.com for the hint)
+
+  * backport file_copy from PVE 4
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 16 Aug 2016 16:53:36 +0200
+
+libpve-common-perl (4.0-71) unstable; urgency=medium
+
+  * fix mac address generation limitation
+
+  * fix #1046: add non-snapshotted disks as unused
+
+  * df: untaint the result
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 11 Jul 2016 11:29:42 +0200
+
+libpve-common-perl (4.0-70) unstable; urgency=medium
+
+  * Fix #132: hold a lock while setting up vlan bridges
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Jun 2016 11:21:16 +0200
+
+libpve-common-perl (4.0-69) unstable; urgency=medium
+
+  * vlan fixups: remove existing vlan ids
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Jun 2016 06:53:58 +0200
+
+libpve-common-perl (4.0-68) unstable; urgency=medium
+
+  * catch malformed mailto/mailfrom in sendmail
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 09 Jun 2016 17:56:26 +0200
+
+libpve-common-perl (4.0-67) unstable; urgency=medium
+
+  * added: enter_systemd_scope
+
+  * move Network::get_active_interfaces to ProcFSTools
+
+  * add netmasks starting from /8 to local netmask list
+
+  * Consider /31 and /32 valid subnet masks
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 03 Jun 2016 11:27:13 +0200
+
+libpve-common-perl (4.0-66) unstable; urgency=medium
+
+  * added: openat, mkdirat
+
+  * Allow O_PATH and O_TMPFILE to be exported
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 01 Jun 2016 11:31:59 +0200
+
+libpve-common-perl (4.0-65) unstable; urgency=medium
+
+  * run_cli_handler: add no_rpcenv parameter
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 25 May 2016 11:33:52 +0200
+
+libpve-common-perl (4.0-64) unstable; urgency=medium
+
+  * print_property_string: don't print the default key's name
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 23 May 2016 06:26:40 +0200
+
+libpve-common-perl (4.0-63) unstable; urgency=medium
+
+  * show warning when using VLAN 1 on a VLAN aware bridge
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 May 2016 11:23:27 +0200
+
+libpve-common-perl (4.0-62) unstable; urgency=medium
+
+  * re-enable run_cli, which is still in use
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 14 May 2016 11:27:23 +0200
+
+libpve-common-perl (4.0-61) unstable; urgency=medium
+
+  * remove PodParser.pm, implement keyAlias feature (replaces group feature)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 11 May 2016 11:09:29 +0200
+
+libpve-common-perl (4.0-60) unstable; urgency=medium
+
+  * setup_tc_rate_limit: Use run_command instead of system
+
+  * When starting in debug mode, starts the daemon without going
+    through systemctl
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 May 2016 07:05:49 +0200
+
+libpve-common-perl (4.0-59) unstable; urgency=medium
+
+  * Fix #908: cleanup OVS ports in tap_unplug
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 13 Apr 2016 06:37:15 +0200
+
+libpve-common-perl (4.0-58) unstable; urgency=medium
+
+  * Add validate_ssh_public_keys
+
+  * Handle string parameter to file content replacement
+
+  * Tools: add sendmail
+
+  * Tools: add tempfile and tempfile_contents
+
+  * fix O_PATH value
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 05 Apr 2016 06:28:45 +0200
+
+libpve-common-perl (4.0-57) unstable; urgency=medium
+
+  * fix #923: uninitalized value in remove_lock
+
+  * new PVE::RESTHandler::dump_properties
+
+  * generate_typetext: handle enums and booleans automatically
+
+  * property strings: introduce key grouping feature
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 01 Apr 2016 07:15:56 +0200
+
+libpve-common-perl (4.0-56) unstable; urgency=medium
+
+  * add the 'urlencoded' string format
+
+  * property strings: check for commas in values
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Mar 2016 08:47:06 +0100
+
+libpve-common-perl (4.0-55) unstable; urgency=medium
+
+  * add missing check for undef in is_mounted
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Mar 2016 16:48:19 +0100
+
+libpve-common-perl (4.0-54) unstable; urgency=medium
+
+  * net: don't die in get_active_interfaces() and try both address families
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 15 Mar 2016 06:45:55 +0100
+
+libpve-common-perl (4.0-53) unstable; urgency=medium
+
+  * net: tap_plug() needs to apply rate limiting
+
+  * network: tap_rate_limit: fix uninitialized value
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Mar 2016 15:51:12 +0100
+
+libpve-common-perl (4.0-52) unstable; urgency=medium
+
+  * AbstractConfig: Decide whether volume is added as unused in subclass
+
+  * AbstractConfig: Introduce __snapshot_create_vol_snapshots_hook
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Mar 2016 11:34:24 +0100
+
+libpve-common-perl (4.0-51) unstable; urgency=medium
+
+  * Add AbstractConfig base class
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Mar 2016 10:12:26 +0100
+
+libpve-common-perl (4.0-50) unstable; urgency=medium
+
+  * Add since and until parameter to dump_journal
+
+  * pod: generate property string documentation
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 02 Mar 2016 06:23:24 +0100
+
+libpve-common-perl (4.0-49) unstable; urgency=medium
+
+  * schema: error on missing keys without default keys
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 18 Feb 2016 09:40:35 +0100
+
+libpve-common-perl (4.0-48) unstable; urgency=medium
+
+  * added syncfs syscall and sync_mountpoint helper
+
+  * Applying: schema: disable additional properties in property strings
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Feb 2016 11:24:34 +0100
+
+libpve-common-perl (4.0-47) unstable; urgency=medium
+
+  * Implement refcounting for flocks
+
+  * CLIHandler: add missing use PVE::INotify
+
+  * Fix #882: active state of interfaces depends on ipv6
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 10 Feb 2016 11:13:32 +0100
+
+libpve-common-perl (4.0-46) unstable; urgency=medium
+
+  * add upid_wait method
+
+  * SectionConfig: disable duplicate plugin registration
+
+  * Tools: add setns system call
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Jan 2016 16:55:45 +0100
+
+libpve-common-perl (4.0-45) unstable; urgency=medium
+
+  * network: fix uninitialized value error
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Jan 2016 16:54:06 +0100
+
+libpve-common-perl (4.0-44) unstable; urgency=medium
+
+  * network : add trunks support
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 Jan 2016 17:26:05 +0100
+
+libpve-common-perl (4.0-43) unstable; urgency=medium
+
+  * Fix #861: use safer sprintf formatting
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 08 Jan 2016 12:50:43 +0100
+
+libpve-common-perl (4.0-42) unstable; urgency=medium
+
+  * bash completion: allow fall back to default completion
+
+  * lock_file_full: output also lockname if it cannot be acquired
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 19 Dec 2015 09:06:24 +0100
+
+libpve-common-perl (4.0-41) unstable; urgency=medium
+
+  * Daemon: don't clear CLOEXEC on daemon sockets
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Dec 2015 11:17:21 +0100
+
+libpve-common-perl (4.0-40) unstable; urgency=medium
+
+  * run_command: return exit code and add noerr option
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 30 Nov 2015 13:00:15 +0100
+
+libpve-common-perl (4.0-39) unstable; urgency=medium
+
+  * add function file_copy
+
+  * print_property_string: skip keys early
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 26 Nov 2015 08:09:04 +0100
+
+libpve-common-perl (4.0-38) unstable; urgency=medium
+
+  * Network setup: avoid access to undefinded var $tag
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Nov 2015 06:24:53 +0100
+
+libpve-common-perl (4.0-37) unstable; urgency=medium
+
+  * ProcFSTools: implement conforming parse_mounts
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 13 Nov 2015 11:16:33 +0100
+
+libpve-common-perl (4.0-36) unstable; urgency=medium
+
+  * Tools::df: fork and use Filesys::Df
+
+  * print_property_string: skip undefined values
+
+  * fix CLONE constant declaration
+
+  * Tools: make unshare behave like other perl syscalls
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 30 Oct 2015 07:03:50 +0100
+
+libpve-common-perl (4.0-35) unstable; urgency=medium
+
+  * read_prox_net_ipv6_route fixes
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 23 Oct 2015 12:13:55 +0200
+
+libpve-common-perl (4.0-34) unstable; urgency=medium
+
+  * network: IP_from_cidr and is_ip_in_cidr helpers
+
+  * half-revert: remove autostart property from bridge ports
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 19 Oct 2015 11:14:12 +0200
+
+libpve-common-perl (4.0-33) unstable; urgency=medium
+
+  * allow /32 ipv4 cidrs
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Oct 2015 09:53:52 +0200
+
+libpve-common-perl (4.0-32) unstable; urgency=medium
+
+  * print_property_string: disk-size is a format, not a type
+
+  * Shorter implementation of random_ether_addr()
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 15 Oct 2015 12:22:14 +0200
+
+libpve-common-perl (4.0-31) unstable; urgency=medium
+
+  * parse_property_string: add newline to error strings
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 09 Oct 2015 08:43:47 +0200
+
+libpve-common-perl (4.0-30) unstable; urgency=medium
+
+  * depend on libclone-perl
+
+  * api_clone_schema: use Clone::clone instead of Storable::dclone
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Oct 2015 08:52:09 +0200
+
+libpve-common-perl (4.0-29) unstable; urgency=medium
+
+  * INotify::read_etc_resolv_conf: ipv6 support
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 05 Oct 2015 12:32:00 +0200
+
+libpve-common-perl (4.0-28) unstable; urgency=medium
+
+  * run_cli_handler: add no_init parameter for lxc mount hook
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 02 Oct 2015 13:42:37 +0200
+
+libpve-common-perl (4.0-27) unstable; urgency=medium
+
+  * CLIHandler: fix manpage for method using 'password' handlers.
+
+  * run_cli_handler: replaces run_cli()
+  
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 02 Oct 2015 10:43:14 +0200
+
+libpve-common-perl (4.0-26) unstable; urgency=medium
+
+  * added JSONSchema::print_property_string
+
+  * JSONSchema: added disk-size format
+
+  * Added PVE::JSONSchema::parse_size/format_size
+
+  * Support named formats in typetext generation
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 01 Oct 2015 11:26:11 +0200
+
+libpve-common-perl (4.0-25) unstable; urgency=medium
+
+  * read|write network interfaces : add support for vlan interfaces
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 25 Sep 2015 07:03:01 +0200
+
+libpve-common-perl (4.0-24) unstable; urgency=medium
+
+  * JSONSchema: verify comma-separated property strings
+
+  * JSONSchema: pve-ipv4/6-config and CIDR split
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Sep 2015 08:20:44 +0200
+
+libpve-common-perl (4.0-23) unstable; urgency=medium
+
+  * support QinQ / vlan stacking
+
+  * improve bash completion
+
+  * Tools: add unshare system call
+
+  * Allow top level devel domain name up to 63 characters in email adresse
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Sep 2015 12:11:17 +0200
+
+libpve-common-perl (4.0-22) unstable; urgency=medium
+
+  * Tools::run_command: support command pipes (array of arrays)
+
+  * Tools::run_command: add documentation
+
+  * parse/set bridge_vlan_aware flag
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Sep 2015 09:11:29 +0200
+
+libpve-common-perl (4.0-21) unstable; urgency=medium
+
+  * remove autostart property from bridge ports
+
+  * CLIHandler: allow binaries with '-' in command name
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 15 Sep 2015 09:04:01 +0200
+
+libpve-common-perl (4.0-20) unstable; urgency=medium
+
+  * avoid Exporter warning with Cwd
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Sep 2015 09:13:11 +0200
+
+libpve-common-perl (4.0-19) unstable; urgency=medium
+
+  * add missing formatter property to method schema
+
+  * CLIHandler: add helper to generate bash completion (and config)
+
+  * add helpers to verify API without starting the binary
+
+  * remove + from getopt's prefix_pattern
+
+  * new helpers: read_proc_mounts and is_mounted
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Sep 2015 07:16:47 +0200
+
+libpve-common-perl (4.0-18) unstable; urgency=medium
+
+  * added 'extra-args' CLI handling
+
+  * add bash completion handler
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 01 Sep 2015 17:47:18 +0200
+
+libpve-common-perl (4.0-17) unstable; urgency=medium
+
+  * Added PVE::Network::tcp_ping to replace Net::Ping
+
+  * Tools::run_with_timeout improvement + hires alarm
+
+  * Add generic parse_host_and_port function
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Aug 2015 11:37:10 +0200
+
+libpve-common-perl (4.0-16) unstable; urgency=medium
+
+  * fix bug #860: fix tc rate control
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 17 Aug 2015 09:43:41 +0200
+
+libpve-common-perl (4.0-15) unstable; urgency=medium
+
+  * add tap device name parse fix
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 Aug 2015 09:06:28 +0200
+
+libpve-common-perl (4.0-14) unstable; urgency=medium
+
+  * get_standard_option: do not overwrite defaults when they evaluate to false
+  
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 04 Aug 2015 08:59:48 +0200
+
+libpve-common-perl (4.0-13) unstable; urgency=medium
+
+  * fix tap_plug with vlan for non aware vlan bridges
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 03 Aug 2015 16:13:33 +0200
+
+libpve-common-perl (4.0-12) unstable; urgency=medium
+
+  * tap_plug : add support for vlan aware linux bridge
+
+  * replace /sbin/vconfig with /sbin/ip call
+  
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 30 Jul 2015 08:59:52 +0200
+
+libpve-common-perl (4.0-11) unstable; urgency=medium
+
+  * add ProcFSTools::read_proc_net_ipv6_route
+
+  * added constants: ipv4_reverse_mask and ipv4_mask_hash_localnet 
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 27 Jul 2015 13:12:28 +0200
+
+libpve-common-perl (4.0-10) unstable; urgency=medium
+
+  * add veth_create and veth_delete
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 26 Jun 2015 11:50:24 +0200
+
+libpve-common-perl (4.0-9) unstable; urgency=medium
+
+  * add IPv6 support for /etc/network/interfaces
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 26 Jun 2015 07:56:05 +0200
+
+libpve-common-perl (4.0-8) unstable; urgency=medium
+
+  * PVE::Daemon now calls systemctl for start/stop/restart
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Jun 2015 07:23:46 +0200
+
+libpve-common-perl (4.0-7) unstable; urgency=medium
+
+  * new helper dump_journal to view systemd journal
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 09 Jun 2015 12:16:24 +0200
+
+libpve-common-perl (4.0-6) unstable; urgency=medium
+
+  * add trigger for pve-api-updates
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 01 Jun 2015 13:18:00 +0200
+
+libpve-common-perl (4.0-5) unstable; urgency=medium
+
+  * defer some daemon setup routines
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 28 May 2015 18:07:34 +0200
+
+libpve-common-perl (4.0-4) unstable; urgency=medium
+
+  *  spice-proxy format now uses new address format
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 May 2015 15:33:40 +0200
+
+libpve-common-perl (4.0-3) unstable; urgency=medium
+
+  * add utility to fetch the socket family for a hostname
+
+  * provide Tools::unpack_sockaddr_in46
+
+  * new helper: getaddrinfo_all
+
+  * add a socket family argument to next_*_port functions
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 08 May 2015 12:37:55 +0200
+
+libpve-common-perl (4.0-2) unstable; urgency=medium
+
+  * register new standard option 'pve-startup-order'
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Apr 2015 09:56:10 +0200
+
+libpve-common-perl (4.0-1) unstable; urgency=medium
+
+  * bump version for Debian Jessie
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 26 Feb 2015 11:18:57 +0100
+
+libpve-common-perl (3.0-24) unstable; urgency=low
+
+  * next_migrate_port: higher port range 
+
+  * next_unused_port: test with bind to all IPs
+  
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 11 Feb 2015 06:37:44 +0100
+
+libpve-common-perl (3.0-23) unstable; urgency=low
+
+  * read_etc_network_interfaces : don't always add vmbr0
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Feb 2015 07:01:58 +0100
+
+libpve-common-perl (3.0-22) unstable; urgency=low
+
+  * implement pre-fork daemon
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 08 Jan 2015 14:49:37 +0100
+
+libpve-common-perl (3.0-21) unstable; urgency=low
+
+  * add abstract class to implement daemons
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 17 Dec 2014 14:49:18 +0100
+
+libpve-common-perl (3.0-20) unstable; urgency=low
+
+  * create_firewall_bridge_ovs : activate ovsint interface
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Dec 2014 06:36:17 +0100
+
+libpve-common-perl (3.0-19) unstable; urgency=low
+
+  * new helper register_page_formater
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 06 May 2014 09:40:19 +0200
+
+libpve-common-perl (3.0-18) unstable; urgency=low
+
+  * speedup find_handler
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 24 Apr 2014 14:12:40 +0200
+
+libpve-common-perl (3.0-17) unstable; urgency=low
+
+  * dump_logfile: add filter regex
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Apr 2014 07:20:57 +0200
+
+libpve-common-perl (3.0-16) unstable; urgency=low
+
+  * register new standard option pve-config-digest
+  
+  * move assert_if_modified to PVE::Tools
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 10 Apr 2014 09:49:30 +0200
+
+libpve-common-perl (3.0-15) unstable; urgency=low
+
+  * Add support for bridges with more than one physical link
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 19 Mar 2014 06:52:11 +0100
+
+libpve-common-perl (3.0-14) unstable; urgency=low
+
+  * correctly copy bridge config for vlan bridges
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 26 Feb 2014 07:50:47 +0100
+
+libpve-common-perl (3.0-13) unstable; urgency=low
+
+  * improve random MAC address generation
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Jan 2014 07:37:14 +0100
+
+libpve-common-perl (3.0-12) unstable; urgency=low
+
+  * add support for openvswitch network configuration
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 27 Dec 2013 09:39:39 +0100
+
+libpve-common-perl (3.0-11) unstable; urgency=low
+
+  * add openvswitch support to tap_plug / tap_unplug
+  
+  * register CIDR format
+
+  * register standard options for SPICE
+  
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 21 Dec 2013 09:03:07 +0100
+
+libpve-common-perl (3.0-10) unstable; urgency=low
+
+  * wait_for_vnc_port: avoid unnecessarry delay by using usleep
+  
+  * new helper next_spice_port()
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Dec 2013 13:16:55 +0100
+
+libpve-common-perl (3.0-9) unstable; urgency=low
+
+  * export regular expressions for IPv4 and IPv6 addresses
+  
+  * fix upid parser for long uptimes (> 497 days)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 30 Oct 2013 12:45:52 +0100
+
+libpve-common-perl (3.0-8) unstable; urgency=low
+
+  * do not use 'intl' variant for en an gb keyboard layouts
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Oct 2013 06:56:44 +0200
+
+libpve-common-perl (3.0-7) unstable; urgency=low
+
+  * use warnings everywhere.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 01 Oct 2013 13:20:15 +0200
+
+libpve-common-perl (3.0-6) unstable; urgency=low
+
+  * auth.conf: avoid warning if file does not exist, fix file permissions
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 05 Aug 2013 07:57:16 +0200
+
+libpve-common-perl (3.0-5) unstable; urgency=low
+
+  * add parser for "/etc/apt/auth.conf"
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 25 Jul 2013 09:57:55 +0200
+
+libpve-common-perl (3.0-4) unstable; urgency=low
+
+  * fix bug #381: use persistent reservation file for ports
+
+  * new function PVE::Tools::next_migrate_port()
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 13 May 2013 07:23:35 +0200
+
+libpve-common-perl (3.0-3) unstable; urgency=low
+
+  * fix date in copyright message
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 08 May 2013 10:55:00 +0200
+
+libpve-common-perl (3.0-2) unstable; urgency=low
+
+  * implement shared file locks
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 06 May 2013 11:49:10 +0200
+
+libpve-common-perl (3.0-1) unstable; urgency=low
+
+  * start 3.0 development
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 05 Mar 2013 11:43:46 +0100
+
+libpve-common-perl (1.0-48) unstable; urgency=low
+
+  * depend on libnet-ip-perl
+
+  * Improved ipv4 addresses validation
+  
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 25 Feb 2013 06:20:10 +0100
+
+libpve-common-perl (1.0-47) unstable; urgency=low
+
+  * fix bug #335: correctly verify ipv4 network masks
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 22 Feb 2013 09:13:35 +0100
+
+libpve-common-perl (1.0-46) unstable; urgency=low
+
+  * revert vlan changes
+  
+  * add parser for /etc/iscsi/initiatorname.iscsi
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 13 Feb 2013 10:57:20 +0100
+
+libpve-common-perl (1.0-45) unstable; urgency=low
+
+  * read_meminfo: query KSM page sharing
+  
+  * revert tc rate filter changes: they do not work as expected
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 01 Feb 2013 09:04:27 +0100
+
+libpve-common-perl (1.0-44) unstable; urgency=low
+
+  * vlan changes: use ip command instead of old vconfig, activate gvrp 
+  by default, use bridge instead of raw ethernet device as vlan bridge
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 28 Jan 2013 11:57:33 +0100
+
+libpve-common-perl (1.0-43) unstable; urgency=low
+
+  * tc: use rate filter with mtu 64k (instead of avrate)
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 28 Jan 2013 06:59:32 +0100
+
+libpve-common-perl (1.0-41) unstable; urgency=low
+
+  * correctly count physical sockets
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 31 Dec 2012 08:24:40 +0100
+
+libpve-common-perl (1.0-40) unstable; urgency=low
+
+  * run_command: implement afterfork callback
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 Dec 2012 12:50:12 +0100
+
+libpve-common-perl (1.0-39) unstable; urgency=low
+
+  * remove hardcoded blowfish cipher
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 31 Oct 2012 13:55:06 +0100
+
+libpve-common-perl (1.0-38) unstable; urgency=low
+
+  * fix bug #273: retry flock if it fails with EINTR
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 31 Oct 2012 08:21:43 +0100
+
+libpve-common-perl (1.0-37) unstable; urgency=low
+
+  * fix bug #264: use option pipefail for shell commands
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 29 Oct 2012 09:45:11 +0100
+
+libpve-common-perl (1.0-36) unstable; urgency=low
+
+  * new helper wait_for_vnc_port()
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 24 Oct 2012 08:21:04 +0200
+
+libpve-common-perl (1.0-35) unstable; urgency=low
+
+  * fix bug in read_memory_usage
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 15 Oct 2012 06:32:30 +0200
+
+libpve-common-perl (1.0-34) unstable; urgency=low
+
+  * file_read_firstline: avoid warning with empty files
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 02 Oct 2012 08:05:10 +0200
+
+libpve-common-perl (1.0-33) unstable; urgency=low
+
+  * fix run_command: restore umask correctly
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 26 Sep 2012 13:16:22 +0200
+
+libpve-common-perl (1.0-32) unstable; urgency=low
+
+  * fix typo in error message
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 25 Sep 2012 06:08:02 +0200
+
+libpve-common-perl (1.0-31) unstable; urgency=low
+
+  * minor fix: remove debug output
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 11 Sep 2012 09:22:13 +0200
+
+libpve-common-perl (1.0-30) unstable; urgency=low
+
+  * allow more that 10 physical network interfaces
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 02 Aug 2012 07:28:17 +0200
+
+libpve-common-perl (1.0-29) unstable; urgency=low
+
+  * AbsrtactMigrate: use rsync flags AX (preserve ACLs and xattr)
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 14 Jun 2012 09:08:11 +0200
+
+libpve-common-perl (1.0-28) unstable; urgency=low
+
+  * added SectionConfig.pm, base class for Storage and Auth plugins.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 May 2012 07:18:53 +0200
+
+libpve-common-perl (1.0-27) unstable; urgency=low
+
+  * fix bug #172: use DNS compatible regex in upid parser
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Apr 2012 08:31:44 +0200
+
+libpve-common-perl (1.0-26) unstable; urgency=low
+
+  * add Turkish keyboard mappings
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 11 Apr 2012 08:35:13 +0200
+
+libpve-common-perl (1.0-25) unstable; urgency=low
+
+  * fix bug #135: use DNS compatible naming for 'pve-node'
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 02 Apr 2012 14:10:45 +0200
+
+libpve-common-perl (1.0-24) unstable; urgency=low
+
+  * fix bug #135: allow single letter 'dns-name', allow to start names
+    with numbers
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 02 Apr 2012 12:04:02 +0200
+
+libpve-common-perl (1.0-23) unstable; urgency=low
+
+  * moved dir_glob_regex() and dir_glob_foreach() from PVE::Storage 
+  to PVE::Tools
+  
+  * add vlan setup code to PVE::Network
+  
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 28 Mar 2012 07:56:49 +0200
+
+libpve-common-perl (1.0-22) unstable; urgency=low
+
+  * return number of sockets in read_cpuinfo
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 26 Mar 2012 07:53:35 +0200
+
+libpve-common-perl (1.0-21) unstable; urgency=low
+
+  * use Digest::SHA instead of Digest::SHA1
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 20 Mar 2012 11:21:02 +0100
+
+libpve-common-perl (1.0-20) unstable; urgency=low
+
+  * fix bug #116, #103: try to keep ordering in /etc/network/interfaces
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 19 Mar 2012 13:30:07 +0100
+
+libpve-common-perl (1.0-19) unstable; urgency=low
+
+  * add dns-name format
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 12 Mar 2012 12:31:27 +0100
+
+libpve-common-perl (1.0-18) unstable; urgency=low
+
+  * try to keep ordering in /etc/network/interfaces
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 02 Mar 2012 12:33:34 +0100
+
+libpve-common-perl (1.0-17) unstable; urgency=low
+
+  * better error message for usermod command
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 01 Mar 2012 12:42:30 +0100
+
+libpve-common-perl (1.0-16) unstable; urgency=low
+
+  * try to keep comments in /etc/network/interfaces
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 01 Mar 2012 09:49:22 +0100
+
+libpve-common-perl (1.0-15) unstable; urgency=low
+
+  * add Swedish keymap
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 27 Feb 2012 09:46:36 +0100
+
+libpve-common-perl (1.0-14) unstable; urgency=low
+
+  * increase version to 1.0-14 for RC1
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Feb 2012 15:12:15 +0100
+
+libpve-common-perl (1.0-13) unstable; urgency=low
+
+  * correctly decode utf8 CLI parameters.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Jan 2012 14:04:03 +0100
+
+libpve-common-perl (1.0-12) unstable; urgency=low
+
+  * new helper kvmkeymaplist()
+
+  * fix bug 77: only use cmd2string when necessary
+  
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Jan 2012 11:44:11 +0100
+
+libpve-common-perl (1.0-11) unstable; urgency=low
+
+  * new helper run_with_timeout()
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 15 Dec 2011 11:25:01 +0100
+
+libpve-common-perl (1.0-10) unstable; urgency=low
+
+  * add helpers to implement migration
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 08 Dec 2011 11:03:54 +0100
+
+libpve-common-perl (1.0-9) unstable; urgency=low
+
+  * bug fixes for run_command()
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 02 Dec 2011 10:28:27 +0100
+
+libpve-common-perl (1.0-8) unstable; urgency=low
+
+  * make cli argument parser more flexible
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Nov 2011 08:36:30 +0100
+
+libpve-common-perl (1.0-7) unstable; urgency=low
+
+  * bug fixes (see git log)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Nov 2011 10:07:38 +0100
+
+libpve-common-perl (1.0-6) unstable; urgency=low
+
+  * add PVE::Tools::random_ether_addr()
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 05 Oct 2011 09:19:39 +0200
+
+libpve-common-perl (1.0-5) unstable; urgency=low
+
+  * cleanups (prepare for beta release)
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Aug 2011 07:23:00 +0200
+
+libpve-common-perl (1.0-4) unstable; urgency=low
+
+  * CLIHandler.pm: new command 'printmanpod' to generate manual pages.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 10 Aug 2011 10:17:55 +0200
+
+libpve-common-perl (1.0-3) unstable; urgency=low
+
+  * fix CLIHandler.pm
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 05 Aug 2011 12:40:17 +0200
+
+libpve-common-perl (1.0-2) unstable; urgency=low
+
+  * depend on liburi-perl
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 14 Jul 2011 12:03:37 +0200
+
+libpve-common-perl (1.0-1) unstable; urgency=low
+
+  * initial package
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Aug 2010 14:54:24 +0200
+

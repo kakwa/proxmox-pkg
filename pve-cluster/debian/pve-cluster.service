@@ -1,0 +1,25 @@
+[Unit]
+Description=The Proxmox VE cluster filesystem
+ConditionFileIsExecutable=/usr/bin/pmxcfs
+Wants=corosync.service
+Wants=rrdcached.service
+Before=corosync.service
+Before=cron.service
+After=network.target
+After=sys-fs-fuse-connections.mount
+After=time-sync.target
+After=rrdcached.service
+DefaultDependencies=no
+Before=shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+ExecStart=/usr/bin/pmxcfs
+KillMode=mixed
+Restart=on-failure
+TimeoutStopSec=10
+Type=forking
+PIDFile=/run/pve-cluster.pid
+
+[Install]
+WantedBy=multi-user.target

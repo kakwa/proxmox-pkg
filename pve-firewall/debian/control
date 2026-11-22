@@ -1,0 +1,36 @@
+Source: pve-firewall
+Section: admin
+Priority: optional
+Maintainer: @MAINTAINER@ <@MAINTAINER_EMAIL@>
+Build-Depends: debhelper-compat (= 13),
+               libanyevent-perl,
+               libglib2.0-dev,
+               libnetfilter-conntrack-dev,
+               libnetfilter-log-dev,
+               libpve-access-control,
+               libpve-cluster-perl,
+               libpve-common-perl (>= 7.3-2),
+               proxmox-firewall-data (>= 0.1),
+               pve-cluster (>= 6.0-4),
+               pve-doc-generator (>= 5.3-3),
+Standards-Version: 4.6.2
+
+Package: pve-firewall
+Architecture: any
+Conflicts: ulogd,
+Depends: conntrack,
+         ebtables,
+         ipset,
+         iptables,
+         libpve-access-control,
+         libpve-cluster-perl,
+         libpve-common-perl (>= 9.0.2),
+         libpve-network-perl (>= 1.6.8~),
+         libpve-rs-perl (>= 0.8.13),
+         proxmox-firewall-data (>= 0.1),
+         pve-cluster (>= 6.1-6),
+         ${misc:Depends},
+         ${perl:Depends},
+         ${shlibs:Depends},
+Description: Proxmox VE Firewall
+ This package contains the Proxmox VE Firewall.

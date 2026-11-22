@@ -1,0 +1,153 @@
+libpve-apiclient-perl (3.4.3) trixie; urgency=medium
+
+  * Pass parameters for DELETE requests as query string. They were silently
+    ignored before.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 25 Aug 2026 11:36:07 +0200
+
+libpve-apiclient-perl (3.4.2) trixie; urgency=medium
+
+  * constructor: transparently add API token name in Authorization
+    header and allow one to override through new api_token_name parameter
+
+  * constructor: accept api_token parameter name as alternative to apitoken
+    one.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Nov 2025 18:56:09 +0100
+
+libpve-apiclient-perl (3.4.1) trixie; urgency=medium
+
+  * Before executing a request, check the age of the login ticket. If it
+    exists and is over an hour old, auto-renew it through a new login.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Nov 2025 17:05:03 +0100
+
+libpve-apiclient-perl (3.4.0) trixie; urgency=medium
+
+  * re-build for Debian 13 Trixie based releases.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Jun 2025 16:24:28 +0200
+
+libpve-apiclient-perl (3.3.2) bookworm; urgency=medium
+
+  * fix validation of self-signed cert chains
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 26 Mar 2024 09:35:54 +0100
+
+libpve-apiclient-perl (3.3.1) bookworm; urgency=medium
+
+  * lwp: set SameSite attr of auth cookie to 'strict'
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 09 Jun 2023 07:54:37 +0200
+
+libpve-apiclient-perl (3.3.0) bookworm; urgency=medium
+
+  * re-build for Debian 12 Bookworm based releases
+
+  * switch over to native versioning
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 May 2023 16:07:13 +0200
+
+libpve-apiclient-perl (3.2-1) bullseye; urgency=medium
+
+  * bump version for Debian 11 Bullseye based releases
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 28 Jun 2021 16:45:24 +0200
+
+libpve-apiclient-perl (3.1-3) pve pmg; urgency=medium
+
+  * improve protocol selection heuristic when using 'localhost'
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 04 Dec 2020 12:25:41 +0100
+
+libpve-apiclient-perl (3.1-2) pve pmg; urgency=medium
+
+  * client exception: try to avoid HTTP code duplication in error string
+
+  * certificate verification: trust openssl result if the hostname is getting
+    verified
+
+  * default to verifying hostname with the certificate one if no fingerprint is
+    passed
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Dec 2020 16:09:02 +0100
+
+libpve-apiclient-perl (3.1-1) pve pmg; urgency=medium
+
+  * rework sharing data with the openssl certificate verify callback to avoid
+    creating a refcount cycle, slowly using up all memory
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 30 Nov 2020 15:30:20 +0100
+
+libpve-apiclient-perl (3.0-3) pve pmg; urgency=medium
+
+  * implement API token support and add a example
+
+  * fix #2227: enable totp codes to be passed in cli
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 07 Feb 2020 07:53:51 +0100
+
+libpve-apiclient-perl (3.0-2) pve pmg; urgency=medium
+
+  * check if API user has TFA setup and abort with better error message in that
+    case
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Jul 2019 19:28:56 +0200
+
+libpve-apiclient-perl (3.0-1) pve pmg; urgency=medium
+
+  * bump version for Debian buster
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 May 2019 16:50:27 +0200
+
+libpve-apiclient-perl (2.0-5) unstable; urgency=medium
+
+  * add make target to copy and include files from pve-common - and
+    update Exception.pm
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 Jun 2018 13:05:34 +0200
+
+libpve-apiclient-perl (2.0-4) unstable; urgency=medium
+
+  * fix a case where with the upcoming introduction of sub-commands
+    manual verification of fingerprints would read the user's response from a
+    file rather than stdin
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Jan 2018 15:14:52 +0100
+
+libpve-apiclient-perl (2.0-3) unstable; urgency=medium
+
+  * raise exception if manual fingerprint verification failed
+
+  * use new Exception.pm class to signal errors to caller
+
+  * add APIClient/Exception.pm class
+
+  * cleanup Net::SSLeay error handling
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 17 Jan 2018 14:15:51 +0100
+
+libpve-apiclient-perl (2.0-2) unstable; urgency=medium
+
+  * allow to specify cookie_name
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 06 Apr 2017 11:04:23 +0200
+
+libpve-apiclient-perl (2.0-1) unstable; urgency=medium
+
+  * bump version for debian stretch
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 10 Mar 2017 09:07:29 +0100
+
+libpve-apiclient-perl (1.0-2) unstable; urgency=medium
+
+  * add simple example code: example1.pl, example2.pl and perftest1.pl
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 28 Dec 2016 10:46:52 +0100
+
+libpve-apiclient-perl (1.0-1) unstable; urgency=medium
+
+  * first try
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Dec 2016 08:55:13 +0100
+

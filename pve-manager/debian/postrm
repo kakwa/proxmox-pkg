@@ -1,0 +1,22 @@
+#! /bin/sh
+
+# Abort if any command returns an error value
+set -e
+
+case "$1" in
+    purge)
+	rm -rf /var/log/pveproxy
+	rm -rf /var/lib/pve-manager
+    ;;
+
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+	rm -f /etc/cron.d/pveupdate
+    ;;
+
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+#DEBHELPER#

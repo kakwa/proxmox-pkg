@@ -1,0 +1,59 @@
+Source: lxc-pve
+Section: admin
+Priority: optional
+Maintainer: @MAINTAINER@ <@MAINTAINER_EMAIL@>
+Build-Depends: bash-completion,
+               debhelper (>= 12),
+               dh-apparmor,
+               docbook2x,
+               doxygen,
+               graphviz,
+               libapparmor-dev,
+               libcap-dev,
+               libdbus-1-dev,
+               libgnutls28-dev,
+               libseccomp-dev (>= 2.4~),
+               linux-libc-dev,
+               meson (>= 0.61),
+               pkg-config,
+               systemd-dev,
+               quilt,
+Standards-Version: 4.5.1
+Homepage: https://linuxcontainers.org
+
+Package: lxc-pve
+Architecture: any
+Depends: apparmor,
+         bridge-utils,
+         criu (>= 1.5.2-1),
+         libcap2,
+         lxcfs,
+         python3,
+         uidmap,
+         ${misc:Depends},
+         ${shlibs:Depends},
+Conflicts: liblxc1,
+           lxc,
+Replaces: liblxc1,
+          lxc,
+Provides: liblxc1,
+          lxc,
+Breaks: pve-container (<< 3.1-1),
+Description: Linux containers userspace tools
+ Containers provides resource management through control groups and
+ resource isolation through namespaces. The linux containers, lxc, aims
+ to use these new functionalities to provide an userspace container
+ object which provides full resource isolation and resource control for
+ an applications or a system.
+
+Package: lxc-pve-dev
+Section: libdevel
+Architecture: any
+Depends: lxc-pve (= ${binary:Version}),
+         ${misc:Depends},
+Description: Linux Containers userspace tools (development)
+ Containers provides resource management through control groups and
+ resource isolation through namespaces. The linux containers, lxc, aims
+ to use these new functionalities to provide an userspace container
+ object which provides full resource isolation and resource control for
+ an applications or a system.

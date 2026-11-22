@@ -1,0 +1,1973 @@
+pve-cluster (9.1.15) trixie; urgency=medium
+
+  * pmxcfs: when sending the new cluster ID fails because corosync
+    applies flow control, try again on the next timer tick. Retrying at
+    once could block the event loop of the node with the lowest ID for
+    up to ten seconds per message, delaying the handling of quorum and
+    membership changes.
+
+  * datacenter config: allow setting an empty 'consent-text' again.
+    Since requiring base64 encoding, clearing the text failed with a
+    pattern error, and an existing empty value caused a warning on each
+    read of the configuration.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Nov 2026 13:33:52 +0100
+
+pve-cluster (9.1.14) trixie; urgency=medium
+
+  * cfs: observe the multipath configuration files
+    '/etc/pve/multipath.cfg' and '/etc/pve/multipath-overrides.conf' of
+    the cluster-wide multipath management, so that pmxcfs tracks their
+    versions and readers can cache the parsed configuration until it
+    changes.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Nov 2026 04:28:30 +0100
+
+pve-cluster (9.1.13) trixie; urgency=medium
+
+  * pmxcfs: give every cluster and every standalone node a cluster ID, a random
+    identifier in the file '/etc/pve/cluster-id'. Tools like backup software can
+    use it to tell installations apart, for example if several clusters share
+    one backup target.
+    - a standalone node generates the ID when pmxcfs starts. A cluster generates
+      it once all nodes are in sync and more than half of the configured nodes
+      are present, so that two parts of a cluster cannot end up with different
+      IDs.
+    - only pmxcfs can change the file. To give a node that got separated from
+      its cluster an ID of its own, remove the file in forced local mode.
+
+  * pmxcfs: do not use the node list of the corosync configuration if reading
+    one of its keys fails, for example because a reload removed the key at that
+    moment. A node could be missing from the list, or have no votes, before.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Nov 2026 23:35:52 +0100
+
+pve-cluster (9.1.12) trixie; urgency=medium
+
+  * pmxcfs: confdb: keep the previously known node list if reading the nodes
+    of the corosync configuration fails midway, instead of publishing the
+    partial list as if it were complete.
+
+  * datacenter config: require the 'consent-text' option to be base64
+    encoded, as the web interface did not show it otherwise anyway. An
+    existing value that is not base64 encoded is ignored, with a warning on
+    each read of the configuration.
+
+  * notify: send notifications through the notification queue of the node,
+    from which the new pve-notify-worker service sends them. Callers like the
+    HA manager no longer block on slow notification targets, and processes
+    running as www-data can send notifications too. The log messages about
+    sending a notification thus end up in the journal of pve-notify-worker
+    instead of the task log.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Nov 2026 21:43:17 +0100
+
+pve-cluster (9.1.11) trixie; urgency=medium
+
+  * ipcc: report a failed connection to pmxcfs as an error. Callers could
+    mistake it for an empty answer or for a file that does not exist, for
+    example when reading a config to learn whether it exists.
+
+  * datacenter config: add the 'token-policy' option for a cluster-wide API
+    token policy, as compliance rules like PCI DSS, SOC 2 or ISO 27001 often
+    mandate bounded credential lifetimes. It can require an expiration date,
+    bound the maximum lifetime, forbid extending the expiration date of
+    existing tokens, and require privilege separation. Optionally, tokens
+    created without an expiration date get the maximum lifetime instead of
+    being rejected, and a token can be extended while regenerating its
+    secret. pve-access-control enforces the policy on token creation and
+    update, existing tokens stay untouched.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Nov 2026 02:07:50 +0100
+
+pve-cluster (9.1.10) trixie; urgency=medium
+
+  * fix #8325: pmxcfs: fail writes to /etc/pve instead of hanging
+    indefinitely while the node is not joined to the cluster file system
+    group, for example while it rejoins after network trouble, or once it
+    decided to leave the group because of an error. A hanging write could
+    block everything waiting on the same cfs lock.
+
+  * pmxcfs: report writes that other nodes might still have applied as I/O
+    error (EIO) and log their path, instead of failing them with EBUSY or a
+    misleading result, as if they never happened. This can happen, for
+    example, when the node loses its cluster connection while a write is in
+    flight.
+
+  * pmxcfs: rejoin the cluster file system group right away after leaving
+    it, for example after a failed synchronization, instead of only after
+    about six seconds, by always using a new corosync connection for joining.
+
+  * pmxcfs: reduce log noise during cluster communication trouble by logging
+    each failed message send only once, and only the first send refused while
+    not joined instead of every single one.
+
+  * pmxcfs: always produce valid JSON for guest config property, version and
+    members replies. A manually edited guest config, a status key or a node
+    name with control characters or invalid UTF-8 could break reading
+    properties for all guests in /cluster/resources, or cluster status updates
+    on all nodes.
+
+  * pmxcfs: report the last occurrence of a guest config property in the main
+    section, like the Perl parsers do, and no longer miss a requested property
+    when another one is repeated in a manually edited config.
+
+  * pmxcfs: fix the processing order of queued messages whose counters are
+    more than 2^31 apart. After very long pmxcfs uptimes on nodes with many
+    guests, this could leave a status value stale until its next update, or
+    drop an RRD sample.
+
+  * datacenter config: next-id: add 'unique' and 'enforce' options, and
+    register the 'virtual-guest/used-guest-ids' cluster file for recording
+    guest IDs that were used before. With 'unique', the /cluster/nextid API
+    skips such IDs when suggesting the next free one. With 'enforce', IDs for
+    new guests outside of explicitly configured 'lower' and 'upper' boundaries
+    get rejected, and with 'unique' also previously used IDs.
+
+  * cluster: add helpers to query and check the Proxmox VE version a node
+    runs, for use in version checks for container migration and HA.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Nov 2026 02:26:30 +0100
+
+pve-cluster (9.1.9) trixie; urgency=medium
+
+  * cluster: add a helper that asserts that all cluster nodes are online and
+    run at least a given version. This allows rolling out changes to the
+    format of cluster-wide configuration files safely in mixed-version
+    clusters, without older nodes truncating new entries.
+
+  * notify: load the notification bindings from libpve-rs-perl as
+    PVE::RS::Notify, which supports notification matchers with nested match
+    expressions.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 04 Nov 2026 22:29:13 +0100
+
+pve-cluster (9.1.8) trixie; urgency=medium
+
+  * cluster CA: renew the CA certificate once it would expire within the
+    two-year lifetime of a node certificate, keeping its key and subject.
+    Nothing renewed the ten-year CA certificate so far, so in its last weeks
+    the node certificate got renewed every day, and with less than two weeks
+    left no new one could be issued at all. Node certificates issued before
+    stay valid, and clients that trust the previous CA certificate keep working
+    until it expires. The renewal runs with 'pvecm updatecerts', which pveproxy
+    also runs on start, and logs the date by which such clients need the
+    renewed /etc/pve/pve-root-ca.pem.
+
+  * cluster CA: also renew a CA certificate that lacks the keyUsage extension,
+    which the fix for #6701 only added to newly created CAs. Strict TLS
+    clients, like Python 3.13 and newer and tools built on it such as Ansible,
+    reject such a CA. On clusters set up before that fix, this renewal happens
+    once after the upgrade. Clients that trust the CA keep working, and
+    importing the renewed certificate lets strict clients verify the nodes.
+
+  * node certificates: issue them under a cluster-wide lock, so that nodes
+    renewing at the same time cannot get the same serial number, which
+    browsers can reject, and so that no node signs while the CA gets renewed
+    or replaced.
+
+  * node certificates: let 'pvecm updatecerts' issue a new one if the current
+    one comes from a cluster CA that got replaced, for example by hand. As
+    pveproxy runs this on start, a node that missed the replacement catches up
+    once it is back. Certificates from other issuers are left alone.
+
+  * pvecm: add the 'ca rotate' command to replace the cluster CA key and
+    certificate, for example after the key got exposed. It lets every online
+    node issue a new node certificate and lists the nodes it could not reach.
+    Unlike the renewal, there is no overlap with the previous CA: replace it
+    with the new one in the trust store of clients, as keeping it would still
+    accept certificates signed with the old key. SPICE consoles of running VMs
+    fail until the VM is restarted or migrated.
+
+  * pvecm updatecerts: keep the output when it does not go to a terminal, like
+    the journal on pveproxy start, where it got lost before.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 27 Oct 2026 14:40:14 +0100
+
+pve-cluster (9.1.7) trixie; urgency=medium
+
+  * pmxcfs: transfer IPC responses larger than 1 MiB in chunks. In very large
+    clusters with many thousands of guests, the guest list, the RRD metrics
+    dump or guest config properties can exceed that size, which made such
+    requests fail and could crash pmxcfs. Daemons that still use the previous
+    client library after the upgrade get a "Message too long" error for such
+    responses until they are restarted.
+
+  * pmxcfs: do not crash if an IPC response cannot be sent, for example to a
+    client that does not read its responses. The error handling freed the
+    client connection while libqb was still using it.
+
+  * pmxcfs: fix cluster log messages being rejected at random, depending on
+    leftover data from earlier requests of the same process.
+
+  * pmxcfs: keep the age of cluster locks when the lock table is rebuilt on
+    startup or during a resync. Stale HA or replication locks now expire after
+    120 seconds as intended, instead of their timer starting over.
+
+  * pmxcfs: treat a failed database transaction during a resync as failure.
+    Previously, a node could consider itself in sync without having applied
+    the updates it received.
+
+  * pmxcfs: speed up listing large directories and collecting the updates for
+    a cluster resync, both of which took quadratic time.
+
+  * pmxcfs: fix rare file system issues:
+    - reading an empty file that was enlarged with truncate, without writing
+      any data to it, crashed pmxcfs
+    - a rename that failed, for example for a non-empty source directory,
+      still removed the destination
+    - renaming an entry onto itself through a path with repeated slashes could
+      crash pmxcfs
+
+  * pmxcfs: harden the IPC interface against local clients in the www-data
+    group:
+    - parse requests from a private copy, as the shared memory they arrive in
+      stays writable for the client
+    - check request lengths before reading any of their fields
+    - recognize private files also through paths with repeated slashes, which
+      let read-only clients read them
+    - compare API tokens in constant time
+
+  * pmxcfs: harden the communication between cluster nodes:
+    - reject malformed messages whose lengths overflow or whose index and log
+      entries point outside the message
+    - reject rename messages without a target instead of crashing
+    - leave the cluster group when a node sends an empty state, instead of
+      hanging the resync
+    - do not drop cluster log entries of nodes whose name hashes differ only
+      in their upper half
+    - fix an out-of-bounds read while comparing indexes during a resync
+    - stop sending uninitialized stack memory to all nodes with every status
+      update
+
+  * pmxcfs: log real failures to create RRD directories, instead of possibly
+    logging a bogus error after creating one successfully.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 23 Oct 2026 17:32:28 +0200
+
+pve-cluster (9.1.6) trixie; urgency=medium
+
+  * datacenter config: ignore an empty 'crs' setting instead of crashing the
+    HA cluster resource manager on it; the empty value is dropped with a
+    warning on read and stripped on the next write, so a broken config heals
+    on the next save.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 24 May 2026 01:53:29 +0200
+
+pve-cluster (9.1.5) trixie; urgency=medium
+
+  * datacenter config: scale the HA auto-rebalance threshold and minimum
+    improvement margin from a 0.0-1.0 fraction to 0-100 percent. The
+    values now match the percent representation used in the HA panel
+    status and configuration UI.
+    NOTE: if you set this value during testing of the new dynamic CRS feature
+    you will need to adapt and re-set this to the same value multiplied by
+    100. If you did not alter the defaults, you do not need to do anything.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 17 May 2026 00:23:55 +0200
+
+pve-cluster (9.1.4) trixie; urgency=medium
+
+  * datacenter config: add 'location' property to optionally describe a
+    cluster's geographic location with a name and coordinates, for use by
+    management systems like Proxmox Datacenter Manager.
+
+  * pmxcfs: add 'priv/wg-keys.cfg' to observed files as preparation for
+    WireGuard SDN fabrics.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 13 May 2026 01:55:51 +0200
+
+pve-cluster (9.1.3) trixie; urgency=medium
+
+  * pmxcfs: add 'sdn/prefix-lists.cfg' and 'sdn/route-maps.cfg' to observed
+    files.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 05 May 2026 23:59:06 +0200
+
+pve-cluster (9.1.2) trixie; urgency=medium
+
+  * fix #6701: setup: add keyUsage extension to root CA for RFC 5280
+    compliance. Python 3.13 now enforces strict X.509 validation, which broke
+    clients like Ansible connecting to the API.
+
+  * setup: harden certificate generation by replacing temporary OpenSSL config
+    files with CLI arguments and moving the temporary CSR file from /tmp to
+    /run/pve-cluster to avoid symlink race conditions.
+
+  * fix #2685: datacenter config: allow 4-bit suffix in mac_prefix.
+
+  * datacenter config: add dynamic load scheduler option and auto rebalancing
+    options for the HA Manager, allowing automatic VM/CT migration to balance
+    load across cluster nodes.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 02 Apr 2026 17:35:03 +0200
+
+pve-cluster (9.1.1) trixie; urgency=medium
+
+  * pmxcfs: improve cluster join handling:
+    - don't abort when backup of the old config database fails, improving
+      resilience of the cluster join process. If the backup succeeds, the old
+      database is removed; if it fails, the database is renamed as fallback.
+    - correctly set backup directory mode.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Mar 2026 15:21:38 +0100
+
+pve-cluster (9.1.0) trixie; urgency=medium
+
+  * cfs lock: reduce time between lock attempts over each iterations to
+    increase chance for longer running operations to get the lock on high
+    contention, reducing starvation.
+
+  * corosync config: allow to override token coefficient on cluster create and
+    lower the default from 650 ms to 125 ms. This coefficient is used in
+    combination with the amount of nodes to calculate various timeouts inside
+    corosync. We found that it's default was rather high, which was, e.g.,
+    causing needless long wait times for new quorate partitions to form (>50s
+    for >30 nodes), which could impact cluster operations during node
+    maintenance or failure. The previous defaults was chosen on assumptions of
+    another network stack and also network reliability status from about 20
+    years ago, the new 125 ms still has significant head room for safe
+    operations. This change will also cause kronosnet, the current
+    communication underlay network of corosync, to send more frequent pings
+    and apply shorter timeouts, the increase in traffic is still small and
+    should be negligible while providing faster feedback to host or network
+    availability changes.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Mar 2026 20:54:22 +0100
+
+pve-cluster (9.0.7) trixie; urgency=medium
+
+  * RRD metrics: fix resolution and point count for querying the data of month
+    and year time frames, which otherwise resulted in showing a lower
+    resolution than it was available.
+
+  * RRD metrics: transparently fetch data from old RRD files on demand. This
+    will replace the explicit RRD data migration but rather transparently
+    switch between querying new or old RRD files (or both on overlap) when
+    querying RRD metric data or rendering a bitmap graph.
+
+  * pmxcfs: status: always use 9.0-format RRD files when writing out metric
+    data.
+
+  * fix #6615: rrd: only return last entry if it's really a complete one. RRD
+    fetch can include the latest bucket before metrics are flushed, resulting
+    the last entry consisting only of a timestamp without value.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 Nov 2025 20:23:55 +0100
+
+pve-cluster (9.0.6) trixie; urgency=medium
+
+  * rrd: cope with only partially renamed memavailable field when old data was
+    migrated.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 04 Aug 2025 12:38:19 +0200
+
+pve-cluster (9.0.5) trixie; urgency=medium
+
+  * pmxcfs: remove legacy ipam db and mac cache files.
+
+  * pmxcfs: various internal code clean-ups and fixing some smaller memory
+    leaks.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 01 Aug 2025 14:58:03 +0200
+
+pve-cluster (9.0.4) trixie; urgency=medium
+
+  * pmxcfs: status: fix create sub directories in /var/lib/rrdcached/db when
+    needed.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 01 Aug 2025 10:49:28 +0200
+
+pve-cluster (9.0.3) trixie; urgency=medium
+
+  * status: introduce new pve-{type}- rrd and metric format for PVE 9 to
+    simpler allow extending this in the future, if needed.
+
+  * add Pressure Stall Information (PSI) of memory, CPU and IO for nodes and
+    virtual guest.
+
+  * add ZFS Arc size and 'memavailable' columns for nodes.
+
+  * add 'memhost' for total memory consumption of virtual machines from POV of
+    the host.
+
+  * increase aggregate windows to match how we do it for the Proxmox Backup
+    Server, providing more granularity over time, e.g. 1 point/minute for a
+    whole day, 1 point/30min for a month and 1 point/6h for a year.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 31 Jul 2025 03:51:52 +0200
+
+pve-cluster (9.0.2) trixie; urgency=medium
+
+  * datacenter config: correctly serialize the replication property when
+    writing the config.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Jul 2025 14:18:22 +0200
+
+pve-cluster (9.0.1) trixie; urgency=medium
+
+  * fix #6434: pmxcfs: add context to errors stemming from the connection to
+    corosync having failed.
+
+  * pmxcfs: pretty print corosync error codes
+
+  * fix #6445: correctly set size when stat-ing symlinks, as the size of a
+    symlink should be the length of its target (name, not content).
+
+  * cfs: add 'fabrics.cfg' and 'ha/rules.cfg' to observed files.
+
+  * datacenter config: add schema for cluster-wide replication settings.
+
+  * cfs status: drop old pve2-vm rrd schema support.
+
+  * cfs status: handle new metrics update data.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Jul 2025 00:27:03 +0200
+
+pve-cluster (9.0.0) trixie; urgency=medium
+
+  * re-build for Debian 13 "Trixie" based Proxmox releases.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 02 Jun 2025 20:54:19 +0200
+
+pve-cluster (8.1.0) bookworm; urgency=medium
+
+  * notify: add helper for querying common template data
+
+  * add mapping/directory.cfg for resource mapping to observed files
+
+  * cluster: add sdn fabrics config file
+
+  * add consent-text parameter to datacenter config file
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 04 Apr 2025 19:13:26 +0200
+
+pve-cluster (8.0.10) bookworm; urgency=medium
+
+  * cfs: add 'sdn/mac-cache.json' to observed files in a similar spirit as
+    adding 'sdn/pve-ipam-state.json' recently.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Nov 2024 22:19:58 +0100
+
+pve-cluster (8.0.9) bookworm; urgency=medium
+
+  * cfs: add 'sdn/pve-ipam-state.json' to observed files so that the
+    overly restricted 'priv/ipam.db' can be migrated to a path that does not
+    requires root privileges for reading it. This is just a state file and
+    thus more in line with our various configs, not as secret like actual
+    passwords or keys.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Nov 2024 16:30:06 +0100
+
+pve-cluster (8.0.8) bookworm; urgency=medium
+
+  * fix #5728: pmxcfs: allow bigger writes than 4k by using the fuse
+    big_writes option. This reduces write-amplification in the sqlite DB for
+    writes bigger than 4 KiB, especially if paired with a recent change to the
+    file_set_contents helper from pve-common to write as much as possible in
+    one go.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Oct 2024 19:10:29 +0200
+
+pve-cluster (8.0.7) bookworm; urgency=medium
+
+  * fix #5461: pvecm: use ssh_info_to_command for intra cluster ssh
+
+  * notify: use named template instead of passing template strings
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 04 Jun 2024 10:58:47 +0200
+
+pve-cluster (8.0.6) bookworm; urgency=medium
+
+  * cfs_write_file: fix accidental UTF-8 re-encoding
+
+  * ssh: default to 4096 bit keys when generating
+
+  * datacenter config: mark notification settings as deprecated/unused
+
+  * fix #4886: write node SSH hostkey to pmxcfs
+
+  * fix #4886: SSH: pin node's host key if available
+
+  * pvecm: stop merging SSH known hosts by default
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 25 Mar 2024 18:02:24 +0100
+
+pve-cluster (8.0.5) bookworm; urgency=medium
+
+  * datacenter config: fix descriptions for user-tag-access schema
+
+  * datacenter config: add missing language short-codes and comment what
+    actual language each refers too.
+
+  * fix # 4764: datacenter config: default MAC prefix to official Proxmox OUI
+
+  * datacenter config: avoid writing out default MAC prefix
+
+  * pmxcfs: track changes for new priv/macs.db ant virtual-guests/profiles.cfg
+    files
+
+  * notify: adapt to matcher based notification system
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 17 Nov 2023 14:40:32 +0100
+
+pve-cluster (8.0.4) bookworm; urgency=medium
+
+  * fix #4937: force UTF-8 encoding when writing notification
+    configuration files to avoid issues with certain characters like
+    'ü'.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 11 Sep 2023 13:55:07 +0200
+
+pve-cluster (8.0.3) bookworm; urgency=medium
+
+  * add libpve-notify-perl package
+
+  * add configuration files for notifications to observed files
+
+  * add notification configuration for APT, fencing and replication to
+    datacenter config
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Jul 2023 15:06:08 +0200
+
+pve-cluster (8.0.2) bookworm; urgency=medium
+
+  * datacenter config: turn shutdown policy into a standard option
+
+  * pmxcfs: check all addresses from getaddrinfo to find non-loopback one
+
+  * pmxcfs: log resolved IP and improve log on failure to resolve
+
+  * pvecm: updatecerts: wait for the quorum and always report if it fails to
+    ensure that the base hierarchy and certificates exists
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 01 Jul 2023 19:22:59 +0200
+
+pve-cluster (8.0.1) bookworm; urgency=medium
+
+  * pvecm: fix cluster join over ssh with newer rsync
+
+  * add configuration files for resource mapping to observed files
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 05 Jun 2023 12:04:37 +0200
+
+pve-cluster (8.0.0) bookworm; urgency=medium
+
+  * re-build for Debian 12 Bookworm based Proxmox VE 8.x series
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 May 2023 17:14:04 +0200
+
+pve-cluster (7.3-3) bullseye; urgency=medium
+
+  * pvecm add: require user to navigate out of `/etc/pve` to avoid issues due
+    to the pmxcfs mountpoint vanishing (restarting) on join
+
+  * datacenter config: mark HA CRS scheduler sub-property optional
+
+  * crs: add `ha-rebalance-on-start` sub-option to datacenter config
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Mar 2023 11:17:00 +0100
+
+pve-cluster (7.3-2) bullseye; urgency=medium
+
+  * fix #1295: add config schema to control pending update notifications
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Jan 2023 16:32:14 +0100
+
+pve-cluster (7.3-1) bullseye; urgency=medium
+
+  * datacenter config: remove typos in "user-tag-access" description
+
+  * datacenter config: add 'case-sensitive' option for 'tag-styles'
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Nov 2022 08:34:10 +0100
+
+pve-cluster (7.2-3) bullseye; urgency=medium
+
+  * add 'allow-subdomains' to webauthn schema
+
+  * pmxcfs: add IPC call to get multiple guest config properties at once
+    including a `get_guest_config_properties` perl wrapper
+
+  * datacenter config: add tag-style property and options to control tag usage
+    rights
+
+  * datacenter config: add 'ordering' property to 'tag-style' option
+
+  * datacenter config: add cluster resource scheduling (crs) options
+
+  * register the `firewall/cluster.fw` file so that we can adapt the firewall
+    code for config caching
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Nov 2022 13:04:33 +0100
+
+pve-cluster (7.2-2) bullseye; urgency=medium
+
+  * datacenter cfg: clarify that the next-id's upper boundary is exclusive and
+    adapt the max value accordingly
+
+  * cluster config: mark qdevice end point as protected to ensure we always
+    can get its status
+
+  * corosync.conf sync: add heuristic to wait for propagation of change to all
+    nodes before triggering a cluster wide config reload
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 14 Jul 2022 07:36:07 +0200
+
+pve-cluster (7.2-1) bullseye; urgency=medium
+
+  * fix #439: datacenter config: add infrastructure for next-id range
+    configuration
+
+  * fix #3957: spell 'occurred' correctly
+
+  * parse datacenter config: remove "\s*" from comment regex
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 28 Apr 2022 17:11:10 +0200
+
+pve-cluster (7.1-3) bullseye; urgency=medium
+
+  * cluster log: fix a segfault / wrong iteration bounds in ringbuffer
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 15 Dec 2021 15:24:22 +0100
+
+pve-cluster (7.1-2) bullseye; urgency=medium
+
+  * fix #3596: handle delnode of offline node
+
+  * datacenter.cfg: avoid warning due to broken fallback if no config file
+    exists
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 15 Nov 2021 14:31:56 +0100
+
+pve-cluster (7.0-5) bullseye; urgency=medium
+
+  * add WebAuthn configuration to datacenter.cfg
+
+  * sysctl snippet: move from /etc to /usr/lib and prefix with `10-` to allow
+    for grasping ordering easier
+
+  * sysctl: disable net.ipv4.igmp_link_local_mcast_reports to reduce ICMPv3
+    broadcasts to the network when a guest interface is plugged into their
+    firewall bridge
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Nov 2021 17:20:23 +0100
+
+pve-cluster (7.0-4) bullseye; urgency=medium
+
+  * datacenter config: add notes property to allow documenting clustert-
+    wide comments/notes
+
+  * api: join info: return explicit HTTP status error-code (424) for
+    no-cluster instead of generic 500 one
+
+  * add 'jobs.cfg' to observed files
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 09 Nov 2021 18:30:10 +0100
+
+pve-cluster (7.0-3) bullseye; urgency=medium
+
+  * pmxcfs: bump basic FS limits, 1 MiB per-file, 128 MiB total and 256k
+    inodes
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 01 Jul 2021 12:42:52 +0200
+
+pve-cluster (7.0-2) bullseye; urgency=medium
+
+  * get tasklist: unpack null-terminated C string before decoding as JSON for
+    compatibillity with the JSON perl-module shipped in Bullseye
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 20 May 2021 11:21:02 +0200
+
+pve-cluster (7.0-1) bullseye; urgency=medium
+
+  * re-build for Debian 11 Bullseye based releases
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 09 May 2021 17:55:48 +0200
+
+pve-cluster (6.4-1) pve; urgency=medium
+
+  * pmxcfs: do not grant LXC configs o+r permissions by default anymore
+
+  * add various tech-preview SDN configuration files
+
+  * rename sdn/.version to sdn/.running-config
+
+  * pmxcfs: db: use SQLITE_STATIC when writing FS updates to the DB to avoid
+    memory copies
+
+  * pmxcfs: db: tell query planner that our prepared statement are long living
+
+  * cfs lock: avoid confusing lock prefix on error from the executed code
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 26 Apr 2021 16:01:04 +0200
+
+pve-cluster (6.2-1) pve; urgency=medium
+
+  * pvecm: print correct nodename when finishing join, to avoid confusion
+
+  * fix #2727: pass correct format for linkX
+
+  * pmxcfs sync: properly check for corosync error
+
+  * pmxcfs: protect CPG operations with mutex
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 30 Sep 2020 13:48:59 +0200
+
+pve-cluster (6.1-8) pve; urgency=medium
+
+  * add ACME plugin config file to cluster files
+
+  * add firewall config locking helper
+
+  * ensure base directories of observed files is created in a central way
+
+  * drop SDN .new files and add .version mechanism
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 03 May 2020 18:19:28 +0200
+
+pve-cluster (6.1-5) pve; urgency=medium
+
+  * improve and add to corosync configuration sanity checking on join with more
+    tests.
+
+  * Enable support for up to 8 corosync links
+
+  * pvecm: qdevice setup: fix check for unsupported odd node count
+
+  * Add cluster join API version check
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 25 Mar 2020 17:38:46 +0100
+
+pve-cluster (6.1-4) pve; urgency=medium
+
+  * pmxcfs: add verify_token IPC request
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 28 Jan 2020 15:24:42 +0100
+
+pve-cluster (6.1-3) pve; urgency=medium
+
+  * fix #2553: ensure status and memdb mutex locking is always the same order
+    to avoid a possible deadlock when accessing the cluster resources status
+    API endpoing while doing snapshots or renames of VMID.conf files frequently
+
+  * add "cpu-models.conf" to observed files
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 17 Jan 2020 10:30:10 +0100
+
+pve-cluster (6.1-2) pve; urgency=medium
+
+  * allow full-mesh routed setup for cluster join
+
+  * describe 'migrate' HA shutdown policy in datacenter.cfg man-page
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Nov 2019 17:19:45 +0100
+
+pve-cluster (6.1-1) pve; urgency=medium
+
+  * allow one to set 'migrate' HA shutdown policy in datacenter.cfg
+
+  * change certificate lifetime to two years, some newer browsers complain on
+    longer lifetime
+
+  * mtunnel migration IP: allow the same IP to be configured multiple times,
+    fixes, among others, routed full-mesh setups
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 26 Nov 2019 15:09:58 +0100
+
+pve-cluster (6.0-9) pve; urgency=medium
+
+  * pvecm: fix weirdly spaced double-prompt for password on join
+
+  * fix #2479: use correct sub in create_conf
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 22 Nov 2019 16:30:21 +0100
+
+pve-cluster (6.0-8) pve; urgency=medium
+
+  * fix #1380: pvecm status: add general cluster information
+
+  * dc.conf: sort languages for easier finding one
+
+  * dc.conf: add missing entries to default language property (he, da)
+
+  * use PVE::Certificate to read fingerprint
+
+  * move CertCache to pve-manager
+
+  * datacenter.cfg: parse/print u2f property string
+
+  * split package into a pve-cluster/pmxcfs one and a perl modules library one
+
+  * pve-cluster.service: move pvecm call to pveproxy.service
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Nov 2019 11:27:27 +0100
+
+pve-cluster (6.0-7) pve; urgency=medium
+
+  * pmxcfs: ensure dcdb returns correct buffer again on parsing the FUSE
+    message. Fixes a regression from 6.0-6.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 02 Sep 2019 11:07:59 +0200
+
+pve-cluster (6.0-6) pve; urgency=medium
+
+  * pmxcfs: code cleanup to allow enabling additional, stricter, compiler
+    checks
+
+  * cfs-utils cluster_config_version: actually enforce config_length
+    when doing the regex match
+
+  * pmxcfs: get config properties: ensure we do not read beyond the in-memory
+    config
+
+  * pmxcfs server: fix off-by-one error when ensuring string NULL
+    termination
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 30 Aug 2019 14:45:19 +0200
+
+pve-cluster (6.0-5) pve; urgency=medium
+
+  * join: better error handling
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 7 Aug 2019 10:47:52 +0200
+
+pve-cluster (6.0-4) pve; urgency=medium
+
+  * Add functions to resolve hostnames and iterate corosync nodes
+
+  * Add qdevice status API endpoint
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 2 Jul 2019 11:18:49 +0200
+
+pve-cluster (6.0-3) pve; urgency=medium
+
+  * restore pvecm mtunnel for now
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 27 Jun 2019 11:17:05 +0200
+
+pve-cluster (6.0-2) pve; urgency=medium
+
+  * pmxcfs: workaround strange g_string_free behaviour in get guest cfg
+    properties:
+
+  * api: join info: we still get ring0_addr in nodelist
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 25 Jun 2019 12:29:56 +0200
+
+pve-cluster (6.0-1) pve; urgency=medium
+
+  * add generic data broadcast interface
+
+  * add get_guest_config_property IPCC method
+
+  * pvecm: remove mtunnel
+
+  * corosync config: add initial corosync 3 + kronosnet support
+
+  * add new corosync-link format and use for create and join
+
+  * corosync: allow one to set link priorities
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Jun 2019 20:13:11 +0200
+
+pve-cluster (6.0-0+1) pve; urgency=medium
+
+  * update version for Debian Buster
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 May 2019 18:10:10 +0200
+
+pve-cluster (5.0-37) unstable; urgency=medium
+
+  * ipcc: increase restart grace period
+
+  * pmxcfs: allow read access for www-data to /run dir to let pveproxy
+    detect pmxcfs restarts
+
+  * fix #1777: join: assert that local nodename bound IP is configured
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 30 Apr 2019 13:58:42 +0000
+
+pve-cluster (5.0-36) unstable; urgency=medium
+
+  * datacenter: only print properties to string if not already done
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 10 Apr 2019 15:46:45 +0200
+
+pve-cluster (5.0-35) unstable; urgency=medium
+
+  * restart pve-cluster.service on failure
+
+  * add u2f configuration to datacenter.cfg
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 03 Apr 2019 13:37:03 +0200
+
+pve-cluster (5.0-34) unstable; urgency=medium
+
+  * fix #2049: avoid conflict with chrony service
+
+  * fix #1891: Add zsh command completion for pvecm
+
+  * allow to setup and remove qdevice for cluster with the pvecm CLI
+    tool
+
+  * mac_prefix: do not allow multicast prefixes
+
+  * cluster: use lock for legacy authkey generation
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 14 Mar 2019 09:34:16 +0100
+
+pve-cluster (5.0-33) unstable; urgency=medium
+
+  * add ha setting format string property to datacenter.cfg
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Jan 2019 12:56:28 +0100
+
+pve-cluster (5.0-32) unstable; urgency=medium
+
+  * pmxcfs: add ceph.conf to observed files
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 20 Dec 2018 10:40:04 +0100
+
+pve-cluster (5.0-31) unstable; urgency=medium
+
+  * add 'for internal use' to description of addnode
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Nov 2018 13:06:11 +0100
+
+pve-cluster (5.0-30) unstable; urgency=medium
+
+  * simplify buildsys: replace autotools with plain makefiles
+
+  * api/join: avoid using an IPv6 address as worker task ID
+
+  * Fix #1848: typo in PVE::Cluster::join()
+
+  * Fix #1849: typos: aquire -> acquire
+
+  * add missing languages to datacenter_schema
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 Aug 2018 13:59:49 +0200
+
+pve-cluster (5.0-29) unstable; urgency=medium
+
+  * fix #1843: always free certificate file after reading it
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 24 Jul 2018 11:16:07 +0200
+
+pve-cluster (5.0-28) unstable; urgency=medium
+
+  * pvecm updatecerts: run in fork and time out after 30 seconds
+
+  * use constants for IPC request types
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Jul 2018 14:12:33 +0200
+
+pve-cluster (5.0-27) unstable; urgency=medium
+
+  * fix #1743: cluster create: default to ring0_addr for bindnet0
+
+  * api: allow cluster wide sys auditors to get join info
+
+  * add lock helper for ACME
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 04 May 2018 12:55:49 +0200
+
+pve-cluster (5.0-26) unstable; urgency=medium
+
+  * add 'xtermjs' as possible default console type option
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 24 Apr 2018 11:07:25 +0200
+
+pve-cluster (5.0-25) unstable; urgency=medium
+
+  * fix daemonization of pmxcfs to avoid races with other services and its own
+    post-start hook trying to communicate with it before it's ready
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 13 Apr 2018 13:48:19 +0200
+
+pve-cluster (5.0-24) unstable; urgency=medium
+
+  * fix #1723: cluster joining via the CLI
+
+  * create known_hosts symlink on join
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 11 Apr 2018 11:28:27 +0200
+
+pve-cluster (5.0-23) unstable; urgency=medium
+
+  * API/Cluster: autoflush STDOUT for join and create
+
+  * pvecm join: also default to resolved IP with use_ssh param
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 05 Apr 2018 12:24:49 +0200
+
+pve-cluster (5.0-22) unstable; urgency=medium
+
+  * fix tainted input in backup_cfs_database
+
+  * refactor backup_cfs_database
+
+  * cluster join: ensure updatecerts gets called on quorate cluster
+
+  * api: add fork worker ID for create and join
+
+  * pvecm: check if APIClient exception code is defined
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 13 Mar 2018 12:35:43 +0100
+
+pve-cluster (5.0-21) stable; urgency=medium
+
+  * datacenter.cfg: add bwlimit
+
+  * api/cluster: move addnode/delnode from CLI to API
+
+  * api/cluster/addnode: return cluster config and authkey
+
+  * api/cluster: add join endpoint
+
+  * pvecm add: use API by default to join cluster
+
+  * cluster create: restart corosync & pmxfs in one go
+
+  * api/cluster: move cluster create from CLI to API
+
+  * api/cluster: add endpoint to GET cluster join information
+
+  * use resolved IP address for ring0_addr as default
+
+  * lock locally on cluster create and join
+
+  * pvecm: add: create task log on cluster join
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 27 Feb 2018 09:56:14 +0100
+
+pve-cluster (5.0-20) stable; urgency=medium
+
+  * mtunnel: don't read extra files passed via the command line as input
+
+  * handle pmxcfs restarts in ipcc clients better
+
+  * pmxcfs: remove a now-unnecessary shutdown delay
+
+  * deprecate 'applet' console setting in datacenter.cfg, it now maps to
+    'html5'
+
+  * order LRM before CRM in post-installation commands to improve single-node
+    behavior
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Jan 2018 15:09:45 +0100
+
+pve-cluster (5.0-19) stable; urgency=medium
+
+  * pause older ha-manager versions during post install script to avoid fencing
+    issues
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 07 Dec 2017 15:17:26 +0100
+
+pve-cluster (5.0-18) stable; urgency=medium
+
+  * fix sysctl.d/pve.conf installation
+
+  * fix issues with updating datacenter.cfg with migration settings being used
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 07 Dec 2017 08:11:44 +0100
+
+pve-cluster (5.0-17) stable; urgency=medium
+
+  * handle Net::SSLeay errors correctly
+
+  * factor out reading a nodes ssl cert fingerprint
+
+  * setup_sshd_config: remove useless start_sshd parameter
+
+  * pvecm: add/delete: local lock & avoid problems on first node addition
+
+  * pvecm: check early if the deletion cannot work
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 28 Nov 2017 16:41:50 +0100
+
+pve-cluster (5.0-16) unstable; urgency=medium
+
+  * pvecm: cleanup modules
+
+  * buildsys: autogen debug package
+
+  * cleanup build and packaging system
+
+  * remove unused sysv init.d service file
+
+  * pve-cluster service: remove $DAEMON_OPTS and environment file
+
+  * fix #1566: do not setup ssh config in updatecerts call
+
+  * ssh helper: disable escape keys
+
+  * fix #1559: pmxcfs: add missing lock when dumping .rrd
+
+  * cfs_lock: address race where alarm triggers with lock acquired
+
+  * cfs_lock: always unlock after code was executed
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Nov 2017 08:20:25 +0100
+
+pve-cluster (5.0-15) unstable; urgency=medium
+
+  * cluster: improve error handling when reading files
+
+  * cluster: cfs_update: option to die rather than warn
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Oct 2017 15:06:22 +0200
+
+pve-cluster (5.0-14) unstable; urgency=medium
+
+  * fix #1504: abort in pmxcfs when opening a status file concurrently from
+    many processes
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 21 Sep 2017 14:19:17 +0200
+
+pve-cluster (5.0-13) unstable; urgency=medium
+
+  * fix #1472: fix rrd file path
+
+  * improve internal handling of corosync configuration
+
+  * pvecm: improve locking when adding or deleting cluster nodes
+
+  * improve message outputs on IPC errors
+
+  * update SSH cipher list
+
+  * fix a problem with the tasklist & log when there were many unusually long
+    task logs
+
+  * fix #1486: spelling mistakes in pmxcfs
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 21 Sep 2017 09:37:47 +0200
+
+pve-cluster (5.0-12) unstable; urgency=medium
+
+  * ssh_merge_known_hosts: also add entry if current sshkey does not match
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 12 Jul 2017 12:00:27 +0200
+
+pve-cluster (5.0-11) unstable; urgency=medium
+
+  * ssh_merge_known_hosts: address auth failure problem when using
+    uppercase hostnames
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 Jul 2017 08:53:58 +0200
+
+pve-cluster (5.0-10) unstable; urgency=medium
+
+  * pvecm delnode: prevent deleting current node
+
+  * factor out corosync methods to own module
+
+  * pmxcfs: fix segfault in cfs_create_status_msg
+
+  * add sshinfo_to_command_base
+
+  * mtunnel: add -run-command for insecure pipes
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Jun 2017 08:29:29 +0200
+
+pve-cluster (5.0-9) unstable; urgency=medium
+
+  * Remove a wrong warning message from pmxcfs.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 01 Jun 2017 09:38:12 +0200
+
+pve-cluster (5.0-8) unstable; urgency=medium
+
+  * sshinfo: add the network cidr
+
+  * Fix #1383: pmxcfs: use memdb_tree_entry_free()
+
+  * Cluster.pm: add get_ssh_info and ssh_info_to_command
+
+  * add replication.cfg to observed files
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 31 May 2017 09:11:06 +0200
+
+pve-cluster (5.0-7) unstable; urgency=medium
+
+  * remove storage_replication_network setting from datacenter.cfg
+
+  * fix #1369 - re-allow using hostnames for ringX_addr
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 15 May 2017 14:57:50 +0200
+
+pve-cluster (5.0-6) unstable; urgency=medium
+
+  * remove postinst script
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 03 May 2017 07:42:12 +0200
+
+pve-cluster (5.0-5) unstable; urgency=medium
+
+  * fix check refusing chmod when it should be allowed
+
+  * add storage_replication_network setting to datacenter.cfg
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Apr 2017 13:58:54 +0200
+
+pve-cluster (5.0-4) unstable; urgency=medium
+
+  * allow chown and chmod on pmxcfs (for root:www-data / 0640)
+
+  * fix install location of IPCC.so
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 Apr 2017 15:53:16 +0200
+
+pve-cluster (5.0-3) unstable; urgency=medium
+
+  * rrd_dump: filter undefined values encodes as 'U'
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 17 Mar 2017 11:59:27 +0100
+
+pve-cluster (5.0-2) unstable; urgency=medium
+
+  * Rebuild with new corosync packages to correct dependencies
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 13 Mar 2017 13:23:12 +0100
+
+pve-cluster (5.0-1) unstable; urgency=medium
+
+  * Rebuild for PVE 5.0 / Debian Stretch
+
+  * Require Sys.Audit to read the cluster configuration
+
+  * Fix vmid cast in pmxcfs
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 10 Mar 2017 13:03:20 +0100
+
+pve-cluster (4.0-49) unstable; urgency=medium
+
+  * pvecm add: assert that ringX IPs are available on node add
+
+  * pvecm add: report all errors found at once
+
+  * pvecm addnode: ensure ring1_addr is set if ring 1 is configured
+
+  * pvecm addnode: ensure ring address isn't already used by cluster
+
+  * pvecm addnode: error out on interactive call
+
+  * pvecm create: remove rrp_mode parameter
+
+  * pvecm add: fix check if corosync alread runs
+
+  * Remove depency to libxml-parser-perl
+
+  * buildsys: various cleanups
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 28 Feb 2017 12:02:56 +0100
+
+pve-cluster (4.0-48) unstable; urgency=medium
+
+  * add API class for cluster configuration
+
+  * move corosync config helpers to PVE::Cluster
+
+  * Fix #1199: pmxcfs: vmlist cache update condition in rename
+
+  * pmxcfs: cleanup: remove unnecessary checks before free
+
+  * new helper initialize_cert_cache()
+
+  * moved x509 certificate cache helpers from pve-manager package
+
+  * setup_sshd_config: add start_sshd flag
+
+  * pvecm.pm: add space after perl reference operator
+
+  * error out when getting remote ip address fails
+
+  * get_local_migration_ip: change to a reasonable error message
+
+  * set PERLIB=.. instead of overwriting rules from pve-doc-generator.mk
+
+  * do not set format_description for migration type property
+
+  * removed unused script gen-datacenter-pod.pl
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Nov 2016 12:00:11 +0100
+
+pve-cluster (4.0-47) unstable; urgency=medium
+
+  * add migration format to datacenter config
+
+  * add 'mtunnel' to pvecm
+
+  * add get_local_migration_ip method
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Nov 2016 08:40:21 +0100
+
+pve-cluster (4.0-46) unstable; urgency=medium
+
+  * Fix #1093: allow also delete node by IP
+
+  * reload corosync.conf after removing a node
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 20 Sep 2016 09:36:22 +0200
+
+pve-cluster (4.0-45) unstable; urgency=medium
+
+  * pmxcfs: increase max filesize from 128k to 512k
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 13 Sep 2016 06:30:13 +0200
+
+pve-cluster (4.0-44) unstable; urgency=medium
+
+  * add mac_prefix option to datacenter.cfg
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Aug 2016 14:51:35 +0200
+
+pve-cluster (4.0-43) unstable; urgency=medium
+
+  * ensure quorum is set false when corosync fails
+
+  * cleanup format strings for cfs_* messages
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 11 Jul 2016 13:57:08 +0200
+
+pve-cluster (4.0-42) unstable; urgency=medium
+
+  * Fix command line arguments when creating the ssl private key
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 14 Jun 2016 09:56:01 +0200
+
+pve-cluster (4.0-41) unstable; urgency=medium
+
+  * use UUID for CA certificate subject
+
+  * cleanup calls to external programs
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 10 Jun 2016 13:06:19 +0200
+
+pve-cluster (4.0-40) unstable; urgency=medium
+
+  * pvecm: remove RPCEnvironment use clause
+
+  * fix rule for %.1-synopsis.adoc
+
+  * docs: replace NOTE: with WARNING:
+
+  * Fix #935: fix corosync.conf check
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 25 May 2016 11:37:08 +0200
+
+pve-cluster (4.0-39) unstable; urgency=medium
+
+  * Build-Depend on pve-doc-generator
+
+  * generate man pages with pve-doc-generator
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 Apr 2016 17:43:36 +0200
+
+pve-cluster (4.0-38) unstable; urgency=medium
+
+  * allow empty values in rrddata
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 31 Mar 2016 10:33:07 +0200
+
+pve-cluster (4.0-37) unstable; urgency=medium
+
+  * Add warning for pvecm commands if not part of cluster
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 15 Mar 2016 16:44:50 +0100
+
+pve-cluster (4.0-36) unstable; urgency=medium
+
+  * fix #904: wrap openssl with faketime
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 14 Mar 2016 08:34:47 +0100
+
+pve-cluster (4.0-35) unstable; urgency=medium
+
+  * add 'fencing' to datacenter.cfg
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 04 Mar 2016 17:01:09 +0100
+
+pve-cluster (4.0-34) unstable; urgency=medium
+
+  * always start rrd grephs at 0
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 27 Feb 2016 09:38:04 +0100
+
+pve-cluster (4.0-33) unstable; urgency=medium
+
+  * add check for int overflow on vmids
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 18 Feb 2016 19:08:21 +0100
+
+pve-cluster (4.0-32) unstable; urgency=medium
+
+  * add 'max_workers' to datacenter.cfg
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Feb 2016 10:00:54 +0100
+
+pve-cluster (4.0-31) unstable; urgency=medium
+
+  * Use correct key usage in node SSL certificate
+
+  * Change CA SSL key size to 4096 bit
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 Jan 2016 17:16:40 +0100
+
+pve-cluster (4.0-30) unstable; urgency=medium
+
+  * ipcc_send_rec: clear errno if we get a valid result
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 26 Dec 2015 19:11:13 +0100
+
+pve-cluster (4.0-29) unstable; urgency=medium
+
+  * qb_loop_timer_add: do not use small timeouts (avoid startup
+    problems at boot time)
+
+  * add/use dfsm_is_initialized to avoid unnecessary error logs at startup
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 04 Dec 2015 13:51:42 +0100
+
+pve-cluster (4.0-28) unstable; urgency=medium
+
+  * start pve-cluster before cron, because cron config can be
+    on /etc/pve (vzdump backup jobs)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 02 Dec 2015 13:26:48 +0100
+
+pve-cluster (4.0-27) unstable; urgency=medium
+
+  * start pve-cluster before ceph, because ceph config can be on /etc/pve
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 02 Dec 2015 13:03:31 +0100
+
+pve-cluster (4.0-26) unstable; urgency=medium
+
+  * add Wants=rrdcached.service to pve-cluster.service
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 24 Nov 2015 12:42:44 +0100
+
+pve-cluster (4.0-25) unstable; urgency=medium
+
+  * add 'ha/fence.cfg' to observed files
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Nov 2015 10:49:01 +0100
+
+pve-cluster (4.0-24) unstable; urgency=medium
+
+  * fix bug #790: Remove decode from log_msg
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Oct 2015 17:38:15 +0100
+
+pve-cluster (4.0-23) unstable; urgency=medium
+
+  * corosync: implement RRP support
+
+  * sysctl : fs.aio-max-nr = 10485
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 13 Oct 2015 17:02:14 +0200
+
+pve-cluster (4.0-22) unstable; urgency=medium
+
+  * check_vmid_unused: fix error message
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 05 Oct 2015 13:16:05 +0200
+
+pve-cluster (4.0-21) unstable; urgency=medium
+
+  * add function to lock a domain
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 26 Sep 2015 10:31:25 +0200
+
+pve-cluster (4.0-20) unstable; urgency=medium
+
+  * convert pvecm into a PVE::CLI class
+
+  * install bash completion configuration file
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 25 Sep 2015 13:03:06 +0200
+
+pve-cluster (4.0-19) unstable; urgency=medium
+
+  * check_vmid_unused: improved error message
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Sep 2015 07:56:52 +0200
+
+pve-cluster (4.0-18) unstable; urgency=medium
+
+  * add another bash completion helper: complete_vmid
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Sep 2015 09:19:11 +0200
+
+pve-cluster (4.0-17) unstable; urgency=medium
+
+  * add some bash completion helpers
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Sep 2015 07:21:34 +0200
+
+pve-cluster (4.0-16) unstable; urgency=medium
+
+  * avoid warnings if there is no /etc/pve/datacenter.cfg
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 01 Sep 2015 10:43:30 +0200
+
+pve-cluster (4.0-15) unstable; urgency=medium
+
+  * use simple files for LXC configuration (instead of subdirs)
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 06 Aug 2015 11:22:05 +0200
+
+pve-cluster (4.0-14) unstable; urgency=medium
+
+  * add new observed file status.cfg
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Jun 2015 09:36:53 +0200
+
+pve-cluster (4.0-13) unstable; urgency=medium
+
+  * pvecm: avoid warning about uninitialized value
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Jun 2015 07:33:37 +0200
+
+pve-cluster (4.0-12) unstable; urgency=medium
+
+  * remove debian trigger for pve-api-updates
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 01 Jun 2015 12:22:41 +0200
+
+pve-cluster (4.0-11) unstable; urgency=medium
+
+  *  allow sshd root login when we setup a PVE cluster
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 29 May 2015 14:45:35 +0200
+
+pve-cluster (4.0-10) unstable; urgency=medium
+
+  * add IPv6 support
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 08 May 2015 12:24:06 +0200
+
+pve-cluster (4.0-9) unstable; urgency=medium
+
+  * trigger pve-api-updates event
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 05 May 2015 15:13:41 +0200
+
+pve-cluster (4.0-8) unstable; urgency=medium
+
+  * allow unpriviledged users to read lxc configuration
+
+  * new helper PVE::Cluster::check_vmid_unused
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Apr 2015 07:15:31 +0200
+
+pve-cluster (4.0-7) unstable; urgency=medium
+
+  * track configuration changes inside lxc subdirectories
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 10 Apr 2015 08:31:12 +0200
+
+pve-cluster (4.0-6) unstable; urgency=medium
+
+  * observe more files (improve change tracking)
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 27 Mar 2015 10:54:53 +0100
+
+pve-cluster (4.0-5) unstable; urgency=medium
+
+  * fix tracking of corosync configuration changes
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Mar 2015 09:43:14 +0100
+
+pve-cluster (4.0-4) unstable; urgency=medium
+
+  * fix corosync cmap reader
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Mar 2015 15:08:48 +0100
+
+pve-cluster (4.0-3) unstable; urgency=medium
+
+  * use systemctl to start/stop services
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 13 Mar 2015 11:35:00 +0100
+
+pve-cluster (4.0-2) unstable; urgency=medium
+
+  * fix perl api dependency (perlapi-5.20.0)
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Mar 2015 06:44:45 +0100
+
+pve-cluster (4.0-1) unstable; urgency=medium
+
+  * updated for Debian Jessie
+
+  * use corosync votequorum instead of cman
+
+  * add systemd support
+  
+  * depend on glib >= 2.42
+
+  * depend on corosync => 2.3.4
+
+  * depend on libqb 0.17.1-1
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 23 Feb 2015 16:11:23 +0100
+
+pve-cluster (3.0-17) unstable; urgency=low
+
+  * add ability to update cfs locks
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Feb 2015 11:56:06 +0100
+
+pve-cluster (3.0-16) unstable; urgency=low
+
+  * recompile, and include new package with debug information
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Feb 2015 17:11:00 +0100
+
+pve-cluster (3.0-15) unstable; urgency=low
+
+  * datacenter.cfg: add new email_from option
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 04 Sep 2014 17:31:34 +0200
+
+pve-cluster (3.0-14) unstable; urgency=low
+
+  * datacenter.cfg: add new value for console setting (html5)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 25 Jun 2014 06:22:58 +0200
+
+pve-cluster (3.0-13) unstable; urgency=low
+
+  * fix bug 204: use DERIVE instead of COUNTER
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 30 Apr 2014 07:19:50 +0200
+
+pve-cluster (3.0-12) unstable; urgency=low
+
+  * fix bug #489: debend on libfuse 2.9.2-4 from jessy
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 27 Jan 2014 11:49:27 +0100
+
+pve-cluster (3.0-11) unstable; urgency=low
+
+  * stop service 'pve-cluster' after stopping 'ceph'
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 13 Jan 2014 07:46:35 +0100
+
+pve-cluster (3.0-10) unstable; urgency=low
+
+  * start service 'pve-cluster' before starting 'ceph'
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 31 Dec 2013 06:35:29 +0100
+
+pve-cluster (3.0-9) unstable; urgency=low
+
+  * datacenter.cfg: add new console setting (applet/vv)
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 10 Dec 2013 06:18:56 +0100
+
+pve-cluster (3.0-8) unstable; urgency=low
+
+  * use warnings instead of global -w flag
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 01 Oct 2013 13:24:54 +0200
+
+pve-cluster (3.0-7) unstable; urgency=low
+
+  * suppress another warning about uninitialized value at boot time
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 20 Aug 2013 10:39:18 +0200
+
+pve-cluster (3.0-6) unstable; urgency=low
+
+  * avoid warning when adding a new node (can't create shared ssh key database...)
+  
+  * avoid warning if /etc/pve/priv/ already exists
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 20 Aug 2013 08:58:17 +0200
+
+pve-cluster (3.0-5) unstable; urgency=low
+
+  * add migration_unsecure param to datacenter.cfg
+  
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 26 Jul 2013 11:06:30 +0200
+
+pve-cluster (3.0-4) unstable; urgency=low
+
+  * depend on fuse (seems most utilities moved from fuse-utils to fuse)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 May 2013 11:42:15 +0200
+
+pve-cluster (3.0-3) unstable; urgency=low
+
+  * remove depencency on fuse-utils (this package is no longer required)
+  
+  * fix warning about uninitialize value
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 May 2013 12:47:03 +0200
+
+pve-cluster (3.0-2) unstable; urgency=low
+
+  * remove all references to apache2 (no longer required)
+  
+  * fix bug 383: resteart pveproxy instead of apache2
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 14 May 2013 10:50:06 +0200
+
+pve-cluster (3.0-1) unstable; urgency=low
+
+  * bump version for wheezy
+  
+  * use libqb0 from wheezy
+  
+  * use new perl version 5.14.2 from wheezy
+  
+  * try to load fuse modules on startup
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 Mar 2013 06:58:00 +0100
+
+pve-cluster (1.0-37) unstable; urgency=low
+
+  * ssh-copy-id: never use keys provided by the ssh-agent
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 01 Feb 2013 09:24:47 +0100
+
+pve-cluster (1.0-36) unstable; urgency=low
+
+  * add another field (status) to new pve2.3-vm rrd format
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Jan 2013 09:27:19 +0100
+
+pve-cluster (1.0-35) unstable; urgency=low
+
+  * add new pve2.3-vm rrd stream (include template value)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Jan 2013 09:55:35 +0100
+
+pve-cluster (1.0-34) unstable; urgency=low
+
+  * implement sendfd to support qemu fdset functionality.
+  
+  * fix ssh_merge_keys
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 05 Dec 2012 12:02:09 +0100
+
+pve-cluster (1.0-33) unstable; urgency=low
+
+  * import existing /root/.ssh/authorized_keys
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 19 Nov 2012 10:26:05 +0100
+
+pve-cluster (1.0-32) unstable; urgency=low
+
+  * do not pass undef tp RRDs::graphv (use '' instead)
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 03 Nov 2012 07:41:42 +0100
+
+pve-cluster (1.0-31) unstable; urgency=low
+
+  * also initialize /root/.ssh with 'pvecm updatecerts'. That way we
+    create a default /root/.ssh/config when updating this package.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 31 Oct 2012 14:22:38 +0100
+
+pve-cluster (1.0-30) unstable; urgency=low
+
+  * create /root/.ssh/config and set default Chiphers
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 31 Oct 2012 13:47:17 +0100
+
+pve-cluster (1.0-29) unstable; urgency=low
+
+  * fix caching problems in create_rrd_graph (do not save any data to files)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 31 Oct 2012 07:12:10 +0100
+
+pve-cluster (1.0-28) unstable; urgency=low
+
+  * preserve authorized_key key order
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 31 Aug 2012 07:35:32 +0200
+
+pve-cluster (1.0-27) unstable; urgency=low
+
+  * fix bug #199: allow node names to start with numbers
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 22 May 2012 11:53:02 +0200
+
+pve-cluster (1.0-26) unstable; urgency=low
+
+  * new rrd format for node data (skip 2 entries). 
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 26 Mar 2012 09:46:47 +0200
+
+pve-cluster (1.0-25) unstable; urgency=low
+
+  * use Digest::SHA instead of Digest::SHA1
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 20 Mar 2012 11:24:21 +0100
+
+pve-cluster (1.0-24) unstable; urgency=low
+
+  * avoid dcdb warnings when creating a new cluster
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 20 Mar 2012 07:51:27 +0100
+
+pve-cluster (1.0-23) unstable; urgency=low
+
+  * fix for pvecm add: avoid ambiguous options
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Feb 2012 11:07:23 +0100
+
+pve-cluster (1.0-22) unstable; urgency=low
+
+  * depend on insserv (we need dependency based boot)
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Feb 2012 10:51:20 +0100
+
+pve-cluster (1.0-21) unstable; urgency=low
+
+  * use new qb_log_filter_fn_set
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 15 Feb 2012 06:59:52 +0100
+
+pve-cluster (1.0-20) unstable; urgency=low
+
+  * new helper: create_pmxcfs_db
+  
+  * show error messages in init.d script (remove -q daemon option)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Jan 2012 10:59:41 +0100
+
+pve-cluster (1.0-19) unstable; urgency=low
+
+  * use new helper PVE::Tools::kvmkeymaplist()
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Jan 2012 11:39:19 +0100
+
+pve-cluster (1.0-18) unstable; urgency=low
+
+  * fix database load bug.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Jan 2012 08:23:47 +0100
+
+pve-cluster (1.0-17) unstable; urgency=low
+
+  * depend on libxml-parser-perl
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Dec 2011 13:50:13 +0100
+
+pve-cluster (1.0-16) unstable; urgency=low
+
+  * fix online status calculation
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Dec 2011 09:21:44 +0100
+
+pve-cluster (1.0-15) unstable; urgency=low
+
+  * add interface to read/write cluster.conf
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 21 Dec 2011 07:16:48 +0100
+
+pve-cluster (1.0-14) unstable; urgency=low
+
+  * fix file name: use cluster.conf instead of cluster.cfg
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Dec 2011 06:56:06 +0100
+
+pve-cluster (1.0-13) unstable; urgency=low
+
+  * do not restart rsyslogd
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 15 Dec 2011 08:11:46 +0100
+
+pve-cluster (1.0-12) unstable; urgency=low
+
+  * use full-size-mode for RRD graph
+
+  * depend on libdigest-hmac-perl
+  
+  * start before cron
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Nov 2011 13:28:58 +0100
+
+pve-cluster (1.0-11) unstable; urgency=low
+
+  * restart pvedaemon after cluster 'add'
+  
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 15 Nov 2011 09:14:30 +0100
+
+pve-cluster (1.0-10) unstable; urgency=low
+
+  * add vzdump backup schedule to observed file list
+
+  * generate vzdump setup file /etc/pve/vzdump.cron
+    
+  * Also create a symlink /etc/cron.d/vzdump to that file.
+
+  * protect IPCC against fork
+  
+  * bug fixes
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Nov 2011 10:11:50 +0100
+
+pve-cluster (1.0-9) unstable; urgency=low
+
+  * restart filesystem after update asap
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 04 Oct 2011 07:28:02 +0200
+
+pve-cluster (1.0-8) unstable; urgency=low
+
+  * set exec permission on openvz action scripts
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 03 Oct 2011 07:58:05 +0200
+
+pve-cluster (1.0-7) unstable; urgency=low
+
+  * fixes for rrdcached
+  
+  * fix cfs_plug_link_getattr
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Aug 2011 08:15:16 +0200
+
+pve-cluster (1.0-6) unstable; urgency=low
+
+  * removed pvecert binray (use pvecm instead)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 10 Aug 2011 07:55:41 +0200
+
+pve-cluster (1.0-5) unstable; urgency=low
+
+  * fix known_hosts handling (use /etc/ssh/ssh_known_hosts)
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 09 Aug 2011 14:32:20 +0200
+
+pve-cluster (1.0-4) unstable; urgency=low
+
+  * also handle ssh known_hosts file
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 09 Aug 2011 08:21:12 +0200
+
+pve-cluster (1.0-3) unstable; urgency=low
+
+  * new virtual file to enabe/disable debugging
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 08 Aug 2011 08:54:06 +0200
+
+pve-cluster (1.0-2) unstable; urgency=low
+
+  * fix 'pvecm create'
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 05 Aug 2011 12:31:44 +0200
+
+pve-cluster (1.0-1) unstable; urgency=low
+
+  * Initial release
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 03 Feb 2010 13:51:39 +0100
+

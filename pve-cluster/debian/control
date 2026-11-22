@@ -1,0 +1,103 @@
+Source: pve-cluster
+Section: admin
+Priority: optional
+Maintainer: @MAINTAINER@ <@MAINTAINER_EMAIL@>
+Build-Depends: check,
+               debhelper-compat (= 13),
+               libcmap-dev (>= 0.17.1),
+               libcorosync-common-dev,
+               libcpg-dev (>= 2.3.4),
+               libdigest-hmac-perl,
+               libfuse-dev (>= 2.9.2),
+               libglib2.0-dev (>= 2.68),
+               libpve-access-control,
+               libpve-apiclient-perl,
+               libpve-common-perl (>= 9.2.10),
+               libqb-dev (>= 2.0.1),
+               libquorum-dev (>= 2.3.4),
+               librrd-dev,
+               librrds-perl,
+               libsqlite3-dev,
+               libtest-mockmodule-perl,
+               libuuid-perl,
+               pve-doc-generator (>= 6.0-9~),
+               rrdcached,
+               sqlite3,
+Standards-Version: 4.6.2
+
+Package: pve-cluster
+Architecture: any
+Pre-Depends: ${misc:Pre-Depends},
+Depends: corosync (>= 2.3.4-1),
+         fuse,
+         libfuse2 (>= 2.9.2-4),
+         libglib2.0-0 (>= 2.42.1-1),
+         libpve-common-perl (>= 9.2.7~),
+         libqb100,
+         libsqlite3-0,
+         sqlite3,
+         systemd,
+         ${misc:Depends},
+         ${perl:Depends},
+         ${shlibs:Depends},
+Breaks: libpve-access-control (<= 6.0-3),
+        libpve-guest-common-perl (<= 3.0-2),
+        libpve-storage-perl (<= 6.0-9),
+        pve-container (<= 3.0-10),
+        pve-ha-manager (<= 3.0-3),
+        pve-manager (<= 6.0-12),
+        qemu-server (<= 6.0-13),
+Description: "pmxcfs" distributed cluster filesystem for Proxmox Virtual Environment.
+ This FUSE filesystem is using corosync and sqlite3 to provide a cluster-wide,
+ consistent view of config and other files.
+
+Package: libpve-cluster-perl
+Architecture: all
+Pre-Depends: ${misc:Pre-Depends},
+Depends: libcrypt-ssleay-perl,
+         libpve-apiclient-perl,
+         libpve-common-perl (>= 9.1.13),
+         librrds-perl,
+         rrdcached,
+         ${misc:Depends},
+         ${perl:Depends},
+Breaks: pve-cluster (<= 6.0-7),
+Replaces: pve-cluster (<= 6.0-7),
+Description: Proxmox Virtual Environment cluster Perl modules.
+ This package contains various cluster-related perl modules.
+
+Package: libpve-cluster-api-perl
+Architecture: all
+Pre-Depends: ${misc:Pre-Depends},
+Depends: faketime,
+         libcrypt-ssleay-perl,
+         libdigest-hmac-perl,
+         libpve-access-control,
+         libpve-apiclient-perl,
+         libpve-cluster-perl (= ${binary:Version}),
+         libpve-common-perl (>= 8.0.6),
+         libuuid-perl,
+         openssl,
+         rsync,
+         ${misc:Depends},
+         ${perl:Depends},
+Breaks: pve-cluster (<= 6.0-7),
+Replaces: pve-cluster (<= 6.0-7),
+Description: Proxmox Virtual Environment cluster Perl API modules.
+ This package contains the API2 endpoints and CLI binary 'pvecm'.
+
+Package: libpve-notify-perl
+Architecture: all
+Pre-Depends: ${misc:Pre-Depends},
+Depends: libproxmox-rs-perl (>= 0.3.1),
+         libpve-cluster-perl (= ${binary:Version}),
+         libpve-common-perl (>= 8.0.9),
+         libpve-rs-perl (>= 0.16.3),
+         pve-notify-worker,
+         ${misc:Depends},
+         ${perl:Depends},
+Breaks: pve-ha-manager (<< 4.0.5),
+        pve-manager (<< 8.2.3),
+Description: Notify helper module.
+ Contains the main perl module related to managing and sending notifiations
+ according to the cluster wide notification configuration.

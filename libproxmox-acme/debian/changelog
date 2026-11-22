@@ -1,0 +1,272 @@
+libproxmox-acme (1.7.3) trixie; urgency=medium
+
+  * fix #7749: always serialize in same order, fixing EAB with
+    HashiCorp Vault PKI
+
+  * fix #5978: pem parser: relax parsing of chain entries, allowing
+    additional information about the certificate chain members, which
+    some CA software includes in violation of the spec
+
+  * fix #7155/8131: proxmox-acme: support upper-hex
+    mode of _url_encode, used by the alyun, baidu and
+    hw DNS plugins
+
+  * acme: fix USER_AGENT variable interpolation in curl calls
+
+  * fix #7851: acme: add missing _mktemp and restore _dbase64 default, used by the oci and transip DNS plugins
+
+  * acme: add missing _url_replace function, used by the yandex cloud DNS plugin ("yc")
+
+  * tests: rewrite check-missing-functions to catch calls in substitutions, and drop false positives
+
+  * build: add $BUILDDIR to gitignore
+
+  * update acme.sh to upstream 3.1.6 tag
+    - fix #5147: broken namesilo DNS plugin
+    - fix #5519: broken exoscale DNS plugin
+    - fix #7321: broken infomaniak DNS plugin
+    - fix #7770: broken selfhost DNS plugin
+    - fix #8199: broken inwx DNS plugin
+    - remove linode v3 DNS plugin (replaced by linode_v4)
+    - add dnsmint, hestiacp, hw, myloc, nexdns, opteamax, optidata and rltx DNS
+      plugins
+    - numerous improvements and fixes to various DNS plugins
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Nov 2026 10:00:06 +0100
+
+libproxmox-acme (1.7.2) trixie; urgency=medium
+
+  * acme: add missing include for Crypt::OpenSSL::Random to cover some edge
+    cases for when this is called due to the random number generator not being
+    seeded with enough entropy.
+
+  * fix: acme: add missing `_json_decode` function for the Active24 plugin.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 30 Jul 2026 16:01:07 +0200
+
+libproxmox-acme (1.7.1) trixie; urgency=medium
+
+  * update acme.sh plugins to the 3.1.2 tag.
+    This fixes #7120 (OVH DNS plugin now properly deletes TXT records) and
+    #7028 (Add Hetzner Cloud DNS plugin support) and *adds* the following new
+    plugins:
+    - hetznercloud
+    - openprovider_rest
+    - spaceship
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 31 Mar 2026 18:51:42 +0200
+
+libproxmox-acme (1.7.0) trixie; urgency=medium
+
+  * update acme.sh plugins to the 3.1.1 tag.
+    This includes various fixes and improvements for existing plugins and the
+    *addition* of the following new plugins:
+      - beget
+      - edgecenter
+      - freemyip
+      - he_ddns
+      - mijnhost
+
+  * switch release distribution over for Debian 13 "Trixie" based releases.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 01 Jun 2025 16:39:18 +0200
+
+libproxmox-acme (1.6.0) bookworm; urgency=medium
+
+  * update acme.sh plugins to the current git master state based on 3.1.0.
+    This includes various fixes and improvements for existing plugins and the
+    *addition* of the following new plugins:
+      - alviy
+      - ionos_cloud
+      - limacity
+      - omglol
+      - technitium
+      - timeweb
+      - west_cn
+      - yandex360
+      - zoneedit
+    Additionally the following plugins got *removed* as their API enpoints are
+    disfunctional:
+      - do
+      - yandex (superseded by yandex360)
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 18 Feb 2025 18:18:14 +0100
+
+libproxmox-acme (1.5.1) bookworm; urgency=medium
+
+  * eba: support decoding MAC key provided in base64url format
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 25 Apr 2024 18:07:36 +0200
+
+libproxmox-acme (1.5.0) bookworm; urgency=medium
+
+  * fix #4497: add support for external account bindings
+
+  * update acme.sh plugins to 3.0.7, including fixes and improvements for
+    existing plugins and the addition of new plugins for:
+    - artfiles
+    - bookmyname
+    - dnsexit
+    - tencent
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 13 Nov 2023 11:35:11 +0100
+
+libproxmox-acme (1.4.6) bookworm; urgency=medium
+
+  * update acme.sh plugins to 3.0.6, including fixes and improvements for
+    existing plugins and the addition of plugins for:
+    - Gcore
+    - Google Domains
+    - IPv64.net
+    - Nanelo
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 13 Jun 2023 09:34:21 +0200
+
+libproxmox-acme (1.4.5) bookworm; urgency=medium
+
+  * re-build for Debian 12 Bookworm based releases
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 07 May 2023 13:06:57 +0200
+
+libproxmox-acme (1.4.4) bullseye; urgency=medium
+
+  * schema: update acme-dns plugin parameter names
+
+  * proxmox-acme: add empty _clearaccountconf_mutable helper used by
+    Cloudflare helper
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Feb 2023 17:28:06 +0100
+
+libproxmox-acme (1.4.3) bullseye; urgency=medium
+
+  * update acme.sh dns api to v3.0.5 and update schema for new/removed
+    plugins
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Dec 2022 13:20:49 +0100
+
+libproxmox-acme (1.4.2) bullseye; urgency=medium
+
+  * plugin-caller: add _readdomainconf stub to fix, among others, the hetzner
+    plugin.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 26 Apr 2022 10:53:02 +0200
+
+libproxmox-acme (1.4.1) bullseye; urgency=medium
+
+  * dns: cope with plugin json index not being available
+
+  * schema: add DNS challenge configuration properties for knot
+
+  * schema: add TOTP authentication property for INWX
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 11 Jan 2022 16:38:44 +0100
+
+libproxmox-acme (1.4.0) bullseye; urgency=medium
+
+  * update acme.sh dns plugins to version 3.0.1
+
+  * support downloading alternate chains
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 08 Oct 2021 11:16:59 +0200
+
+libproxmox-acme (1.3.0) bullseye; urgency=medium
+
+  * plugin-caller: cherry-pick GET/POST retry
+
+  * acme client: fix #3536 untaint data returned from acme server
+
+  * update to acme.sh dns plugins to 3.0.0
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 11 Aug 2021 12:26:19 +0200
+
+libproxmox-acme (1.2.0) bullseye; urgency=medium
+
+  * plugin-caller: add some missing methods from acme.sh that newer plugins
+    use
+
+  * plugin-caller: make no-ops always successful
+
+  * update to acme.sh dns plugins to 2.9.0
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Jul 2021 18:06:19 +0200
+
+libproxmox-acme (1.1.1) bullseye; urgency=medium
+
+  * fix #3390: standalone: explicitly bind to '::' to ensure IPv6 support
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 05 Jul 2021 18:58:10 +0200
+
+libproxmox-acme (1.1.0) pmg pve; urgency=medium
+
+  * split into perl and acme DNS plugin packages for better re-use with our
+    non-perl projects (PBS)
+
+  * update acme.sh to version 2.8.9 and add new DNS plugins to API schema
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 05 May 2021 09:56:25 +0200
+
+libproxmox-acme-perl (1.0.8) pmg pve; urgency=medium
+
+  * update acme.sh to current master and add new DNS plugins
+
+  * add missing 'use PVE::Acme' statement
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 16 Mar 2021 17:11:47 +0100
+
+libproxmox-acme-perl (1.0.7) pmg pve; urgency=medium
+
+  * add missing DNS plugins to schema
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 11 Dec 2020 18:55:29 +0100
+
+libproxmox-acme-perl (1.0.6) pmg pve; urgency=medium
+
+  * update acme.sh dns plugins to 2.8.8
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Dec 2020 11:59:14 +0100
+
+libproxmox-acme-perl (1.0.5) pmg pve; urgency=medium
+
+  * dns challenge: add 'INWX' acme.sh schema
+
+  * fix #2732: use actual plugin config data
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 4 Sep 2020 14:01:13 +0200
+
+libproxmox-acme-perl (1.0.4) pmg pve; urgency=medium
+
+  * update acme.sh dns plugins to 2.8.6
+
+  * describe schema of DigitalOcean and add df (dyndnsfree.de) provider
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 May 2020 20:06:49 +0200
+
+libproxmox-acme-perl (1.0.3) pmg pve; urgency=medium
+
+  * trigger activate-noawait pve-api-updates
+
+  * dns challenge: provide schema for more providers
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 07 May 2020 21:49:51 +0200
+
+libproxmox-acme-perl (1.0.2) pmg pve; urgency=medium
+
+  * add basic schema for DNS API plugins
+
+  * plugin id: limit to 'pve-configid' format
+
+  * add note that the data has to be base64 encoded
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 05 May 2020 19:19:43 +0200
+
+libproxmox-acme-perl (1.0.1) pmg pve; urgency=medium
+
+  * add 'validation-delay' property to DNS challenge plugin
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 03 May 2020 18:06:08 +0200
+
+libproxmox-acme-perl (1.0.0) pmg pve; urgency=medium
+
+  * Initial 1.0.0 package
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 03 May 2020 17:07:29 +0200

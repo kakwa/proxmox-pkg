@@ -1,0 +1,3373 @@
+pve-container (6.1.26) trixie; urgency=medium
+
+  * d/control: require pve-cluster 9.1.13, which ships the helper that backups
+    to a backup provider use to read the cluster ID. Requiring
+    libpve-cluster-perl 9.1.13 did not ensure that, so a partial upgrade could
+    break such backups.
+
+  * vzdump: backup provider: also pass the registration time of the container
+    as 'guest-rtime', if available. A container restored to an unused VMID can
+    keep its uid but gets a new registration time, so providers can tell such
+    registrations apart without parsing the container config.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Nov 2026 12:55:56 +0100
+
+pve-container (6.1.25) trixie; urgency=medium
+
+  * fix #7846: give every container a guest identity: a random 'uid' and the
+    time the container was registered in the cluster. Backup software and other
+    tools can use it to recognize a container, also after its VMID got reused or
+    changed. Containers get the read-only 'meta' property for this, which VMs
+    already have, also with the creation time. New containers and clones get an
+    identity when they get created, existing containers with their next config
+    change.
+    - restore: a restore to an unused VMID adopts the uid of the backup if no
+      other guest in the cluster has it. Restoring a backup with another uid
+      over an existing container is refused unless the new
+      'allow-identity-mismatch' option is set. 'force' alone is not enough
+      anymore. A restore from standard input over a container with an identity
+      always needs the option.
+    - remote migration: the container keeps its uid in the target cluster. If
+      another guest there already has the uid, the migration is refused unless
+      the new 'allow-new-uid' option is set. The tunnel version got bumped, so a
+      migration to a cluster without guest identities is refused.
+    - migration and clone: refuse target nodes whose version would drop the
+      identity.
+    - api: return the uid in the status of a container.
+    - vzdump: pass the uid and the ID of the cluster to backup providers, as
+      'guest-uid' and 'cluster-id' in the info hash of the backup calls.
+
+  * post-stop hook: only change the config while holding the config lock. The
+    hook wrote back the config it had loaded before on every stop, so a config
+    change made at the same time, for example through 'pct set', could get lost
+    when a container shut down or rebooted from the inside. Pending changes are
+    now applied under the lock, by the hook or by the task that stops the
+    container.
+
+  * create, restore: fixes for failed operations:
+    - keep the firewall config of an unused VMID if a create or restore to it
+      fails. The cleanup removed it before, also one that was prepared by hand.
+    - keep the VMID with a locked config if the cleanup of a failed create or
+      restore could not remove all volumes or the firewall config. The leftovers
+      had no config referencing them before, and the next guest with that VMID
+      could take them over.
+    - release an unused VMID again if the worker of a create or restore did not
+      get to start, for example because of a lock timeout.
+    - do not create a container if the user may only overwrite an existing one
+      and that container got removed in the meantime.
+    - only apply network options, which can register addresses in the IPAM of
+      SDN, once the worker replaces the container. A restore that failed early
+      could remove the IPAM entries of the container it kept before.
+    - a restore from a backup file no longer fails if a prune job removes the
+      file in the meantime. Such a restore failed after it had already removed
+      the old container.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Nov 2026 23:35:52 +0100
+
+pve-container (6.1.24) trixie; urgency=medium
+
+  * migration: check that the target node can parse the container config
+    before an intra-cluster migration, as already done for remote migrations.
+    This prevents an outdated target from dropping or ignoring settings it
+    cannot parse yet, like a new mount point option. The check needs
+    pve-manager 9.2.31 or newer on both nodes and can be skipped with the new
+    'skip-config-check' option, which is also passed through the HA stack for
+    HA-managed containers.
+
+  * remote migration:
+    - clean up the reserved CT ID on the target if preparing the migration
+      fails on the source, for example on a tunnel version mismatch or if
+      stopping the container for a restart migration fails.
+    - also log failed tunnel commands in the task log of the target.
+    - clean up the reserved CT ID and the volumes received so far on the
+      target if the tunnel closes before the source sent the container config,
+      for example because the source task got killed. The source keeps the
+      container in that case.
+
+  * create, restore, clone: on failure, remove the firewall config before the
+    container config. Otherwise, the cleanup could remove the firewall config
+    of a guest that another node created with the freed ID in the meantime.
+
+  * restore:
+    - keep the existing container if replacing it fails before it got
+      destroyed, for example if allocating the new volumes fails on a full
+      storage, or for a template with linked clones. Before, the cleanup
+      removed its config and left its volumes unreferenced.
+    - with 'force', only overwrite a container that already existed for the
+      permission checks, and check again whether it is protected. A container
+      created in the meantime makes the restore fail as for an ID in use.
+
+  * api: migration preconditions: describe the reasons why a migration to a
+    node is not allowed per node in the schema, matching the returned data.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Nov 2026 14:35:28 +0100
+
+pve-container (6.1.23) trixie; urgency=medium
+
+  * api: create: mark the root password as sensitive.
+
+  * api: record used CT IDs for supporting the new 'unique' property for the
+    'next-id' datacenter configuration option.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Nov 2026 12:36:03 +0100
+
+pve-container (6.1.22) trixie; urgency=medium
+
+  * storage: handle the volume types that libpve-storage-perl 9.1.17
+    introduces, which tell the volumes of containers ('ct-vol') apart from the
+    disks and saved states of VMs. A storage that is restricted to container
+    volumes can be used for the root disk and mount points of a container, the
+    same as one with the 'rootdir' content type, which keeps allowing them.
+    Replication handles volumes of the new type too. Existing storages and
+    containers work unchanged.
+
+  * restore: explicitly skip pending changes in the config of a backup, as
+    hardening. vzdump never archives pending changes, and a restore did not
+    take them over from a crafted backup before either, but only due to how
+    the API prepares the config of the restored container.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Nov 2026 02:57:28 +0100
+
+pve-container (6.1.21) trixie; urgency=medium
+
+  * api: snapshot rollback: also require VM.PowerMgmt for rolling back a
+    running container without the 'start' parameter, as that leaves the
+    container stopped. Previously, VM.Snapshot.Rollback alone was enough to
+    power off a container this way.
+
+  * restore: backup provider: call the restore methods of an external backup
+    provider as documented, without the storage ID as extra argument. A
+    provider using the documented signatures could not restore containers at
+    all. A provider that reads the second argument of the container restore
+    init and cleanup methods as storage ID needs to be adapted.
+
+  * config: release the IPAM addresses of a network interface removed from a
+    running container, and stop the DHCP client of a host-managed one.
+    Previously, the addresses stayed allocated, even after destroying the
+    container.
+
+  * fix #8162: status: always return 'cpus' as number. For containers that
+    only have 'cpulimit' set it was returned as string, breaking clients that
+    decode the response strictly by the API schema.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 14 Nov 2026 22:30:29 +0100
+
+pve-container (6.1.20) trixie; urgency=medium
+
+  * remote migration: fix removing the temporary config on the target node if
+    the migration fails.
+
+  * pct resize: return the exit status of the resize task, instead of always
+    reporting success once the task was started.
+
+  * config: drop keys that are not defined in the schema, like qemu-server
+    does. Keys like 'net32' or 'net01', which the API rejects but manual edits
+    or restored backups could add, set up an additional network interface
+    without proxmox-firewall rules. A running container keeps such an
+    interface until it is restarted.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 11 Nov 2026 02:09:04 +0100
+
+pve-container (6.1.19) trixie; urgency=medium
+
+  * vzdump: honor the bandwidth limit for container backups to a Proxmox
+    Backup Server as well. Previously, the limit only applied to backups to
+    file-based storages.
+
+  * setup ubuntu: read the version from '/etc/os-release', fixing the setup of
+    Ubuntu 26.10 containers, which no longer ship '/etc/lsb-release'.
+
+  * setup ubuntu: add preliminary support for 27.04.
+
+  * mount points: changing only the 'backup' or 'replicate' flag of a mount
+    point, or the 'replicate' flag of the root disk, now applies directly to a
+    running container instead of staying pending until its next start.
+
+  * fix #6392: setup: fedora: disable the homed first-boot wizard, which waits
+    for console input that cannot be provided during container start.
+    Containers created from the Fedora 42 template seemed to hang on their
+    first boot. Already stuck containers boot normally on their next start.
+
+  * config: document that the 'nameserver' option takes a comma-separated list
+    of DNS server addresses.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 07 Nov 2026 18:30:50 +0100
+
+pve-container (6.1.18) trixie; urgency=medium
+
+  * apparmor: deny AF_ALG sockets in unprivileged containers through the
+    generated AppArmor profile as well. The seccomp rule cannot cover
+    sockets created through io_uring or by 32-bit processes, including
+    every process in a container with the i386 architecture. Containers get
+    the new rule on their next start. A custom seccomp profile, as suggested
+    with 6.1.5, no longer allows AF_ALG. Workloads that need it should run
+    in a VM instead.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Nov 2026 15:04:22 +0100
+
+pve-container (6.1.17) trixie; urgency=medium
+
+  * check_bridge_access: fix control flow issue that can cause bridge access
+    checks to be skipped under some circumstances.
+
+  * use masked-equality for AF_ALG socket seccomp rule, to prevent the filter
+    from being bypassed using bogus values in the high part of the syscall
+    argument value that is ignored by the kernel.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Nov 2026 13:21:35 +0100
+
+pve-container (6.1.16) trixie; urgency=medium
+
+  * packaging: require pve-manager 9.2.22 or newer after removing the obsolete
+    console cleanup helper, to prevent pvestatd errors during partial
+    upgrades.
+
+  * fix #7164: restore: apply the root password and SSH public keys supplied
+    with a container restore instead of silently ignoring them.
+
+  * restore: warn when a container with a recent systemd version may need the
+    nesting feature enabled, as already done on creation and cloning.
+
+  * template: allow converting containers with LVM-backed volumes to
+    templates. These volumes support full clones, but not linked clones.
+
+  * fix #8237: api: allow users without 'VM.Config.Options' to read container
+    configurations and pending changes when 'env' is set. Hide the restricted
+    field instead of failing the entire request.
+
+  * volume move: honor the source container's protection flag when moving
+    volumes to another storage or container.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Oct 2026 15:08:28 +0100
+
+pve-container (6.1.15) trixie; urgency=medium
+
+  * setup: debian: configure IPv6 SLAAC with the 'manual' instead of the
+    'auto' method in /etc/network/interfaces if the container uses Debian's
+    own ifupdown2, which errors out on 'auto'. The kernel then performs SLAAC
+    with its default settings. Containers using classic ifupdown or the
+    Proxmox build of ifupdown2 keep using 'auto'.
+
+  * remote migration:
+    - additionally require the 'VM.Audit' and 'VM.Config.Disk' privileges,
+      as the migration hands the container's configuration and disks to the
+      remote endpoint, and require 'VM.Allocate' if the source container is
+      to be deleted. Users that could migrate with 'VM.Migrate' alone so far
+      need these privileges now.
+    - do not write an empty 'unprivileged' entry into the config of migrated
+      privileged containers, which caused a warning whenever that config was
+      parsed afterwards.
+
+  * config: drop the experimental note from the 'mknod' feature, which is
+    considered stable now.
+
+  * packaging: depend on libpve-network-perl instead of only recommending it,
+    as every Proxmox VE node has it installed through pve-manager anyway, and
+    drop the fallback for nodes without SDN support.
+
+  * mount points: always remove a bind mount again if verifying it fails, for
+    example because it could not be made read-only, instead of leaving it
+    mounted, possibly writable. This affects bind mount points and
+    subvolume-based volumes, for example on ZFS.
+
+  * mount points: harden mounting a container on the host against symlink
+    races by using the same staged mounts as container start. Each volume is
+    now attached to the already checked directory, instead of being mounted
+    by path after the check, which left a window for swapping the path for a
+    symlink. This affects pct mount, fstrim and df, as well as container
+    creation, restore and clone.
+
+  * api: create: only accept the 'VM.Allocate' privilege on the pool passed
+    via 'pool' when creating a new container. Restoring over an existing
+    container requires the privilege on that container itself, which its own
+    pool membership still grants, or 'VM.Backup' as before.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 20 Oct 2026 19:20:44 +0200
+
+pve-container (6.1.14) trixie; urgency=medium
+
+  * fix #7148: reassign volume: check the target container's protection flag
+    before removing the volume from the source config, as the volume would
+    otherwise end up orphaned, present in neither configuration.
+
+  * config: reject line feeds and carriage returns in every rendered config
+    value, including the low-level LXC options and the container runtime
+    environment, which were written out unchecked so far.
+
+  * oci create: harden handling of the image-provided config and user
+    database:
+    - reject all control characters but the tab, a wrong character range let
+      a line feed through that could corrupt the generated container config.
+    - tolerate CRLF line endings in the passwd and group database, which so
+      far broke resolving the supplementary groups for such images.
+    - reject non-numeric user and group IDs, which so far only surfaced as an
+      opaque failure on the first container start.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 27 Aug 2026 21:48:29 +0200
+
+pve-container (6.1.13) trixie; urgency=medium
+
+  * fix #7667: device passthrough: only evaluate errno when querying the
+    device actually failed, fixing passthrough being rejected with "Device
+    does not exist" for privileged containers whose OS type ships no matching
+    LXC configuration.
+
+  * setup: fedora: mask the static 'sys-kernel-config.mount' and
+    'sys-kernel-debug.mount' units when preparing a template, as they cannot
+    work inside a container and would otherwise fail on startup, like already
+    done for CentOS templates.
+
+  * setup: openeuler: configure the network through the network scripts that
+    openEuler templates use, instead of failing because the RedHat release
+    file, which openEuler does not ship, could not be read.
+
+  * api: require the 'VM.Config.Disk' privilege and check access to the
+    referenced volume for unused volume entries, treating them like mount
+    points.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 04 Aug 2026 12:20:31 +0200
+
+pve-container (6.1.12) trixie; urgency=medium
+
+  * fix #7380: query systemd version: resolve the container's init binary path
+    while taking the mount namespace into account and open it with
+    RESOLVE_IN_ROOT, fixing container start failing when the init path was
+    wrongly resolved.
+
+  * api: check VM.PowerMgmt up front when starting a container as part of
+    create/restore or snapshot rollback, so a custom role without that
+    privilege cannot power on the container as a side effect.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 Jul 2026 16:19:54 +0200
+
+pve-container (6.1.11) trixie; urgency=medium
+
+  * fix #3711: destroy container: warn about storage errors while deleting a
+    mount point volume instead of aborting, so a container can still be
+    removed if a volume's backing storage is gone.
+
+  * allow applying pending mount point changes when the backing storage is
+    gone: drop the dangling unused volume with a warning instead of failing,
+    matching virtual machine behavior.
+
+  * destroy container template: fail early with a clear message if a base
+    volume is still in use by a linked clone, instead of partially deleting
+    storage, matching virtual machine behavior.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 08 Jul 2026 05:06:29 +0200
+
+pve-container (6.1.10) trixie; urgency=medium
+
+  * lxc config: mount /dev/shm as tmpfs for application containers (those with
+    a custom entrypoint, where no init system sets it up), to align with the
+    OCI Runtime Spec defaults.
+
+  * fix #7603: config: extend the verbose description of the mountpoint idmap
+    option with examples for range mapping and passthrough.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 May 2026 19:10:48 +0200
+
+pve-container (6.1.9) trixie; urgency=medium
+
+  * volume rescan: also consider volumes that storage plugins list with only
+    an approximate size. Preparatory work, since currently only qcow2 LVs on
+    LVM are reported this way and containers do not use that combination.
+
+  * volume rescan: properly detect zero-sized subvol-format volumes as unused.
+    The previous truthy check skipped them.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 May 2026 21:11:20 +0200
+
+pve-container (6.1.8) trixie; urgency=medium
+
+  * config: correctly skip tab characters in env/entrypoint property.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 May 2026 12:51:28 +0200
+
+pve-container (6.1.7) trixie; urgency=medium
+
+  * api: migration preconditions: also report HA node affinity as a blocking
+    cause, previously only resource-affinity was reported.
+
+  * ubuntu setup: add preliminary support for 26.10.
+
+  * fix #7568: api: clone: use the new VMID for IPAM entries when cloning a
+    container, otherwise the cloned guest re-uses the source VMID in any
+    configured IPAM plugin and ends up with duplicate entries.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 May 2026 11:59:16 +0200
+
+pve-container (6.1.6) trixie; urgency=medium
+
+  * warn about deprecated cgroupv1 keys
+
+  * remove code to generate cgroupv1 config entries, they are not supported
+    and will be warned about and ignored by lxc >= 7.0
+
+  * log 'pct unlock' operations
+
+  * add support for idmapped mounts
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 07 May 2026 12:11:14 +0200
+
+pve-container (6.1.5) trixie; urgency=medium
+
+  * disable AF_ALG sockets via seccomp due to security issues
+    For now, a custom seccomp profile via the raw lxc.seccomp.profile option
+    can be used, using the generated /var/lib/lxc/$vmid/rules.seccomp as a
+    base.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 30 Apr 2026 10:20:28 +0200
+
+pve-container (6.1.4) trixie; urgency=medium
+
+  * fix #7487: setup/suse: setup systemd-networkd if present.
+
+  * api: confirm Sys.Console privilege when creating or restoring a VM and
+    actively enabling HA for it.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 Apr 2026 10:11:41 +0200
+
+pve-container (6.1.3) trixie; urgency=medium
+
+  * fix #7175: replace the deprecated /etc/timezone handling with systemd
+    timedatectl in container setup.
+
+  * api: clone: log the new VMID at the start of the clone task, which was
+    previously not recorded in the task log, journal, or task-worker UPID, for
+    both full and linked clones.
+
+  * external migration: block if HA is configured regardless of management
+    state, as migrating an HA-managed container can confuse the HA stack even
+    when in 'ignored' state. Mirrors the same change in qemu-server.
+
+  * api: vnc/termproxy: bind VNC tickets to the listen port to harden
+    authentication for interactive console sessions.
+
+  * api: vncproxy: always use a freshly generated password when authenticating
+    via the VNC protocol, improving entropy compared to the previous
+    ticket-derived scheme.
+
+  * api: termproxy: pin the accepted ticket in the spawned termproxy process
+    as an additional defense-in-depth measure.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Apr 2026 22:28:24 +0200
+
+pve-container (6.1.2) trixie; urgency=medium
+
+  * make mount point attribute preservation configurable and opt-in
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 12 Feb 2026 15:22:46 +0100
+
+pve-container (6.1.1) trixie; urgency=medium
+
+  * setup: plugin interface: add missing check_systemd_nesting stub.
+
+  * fix #7270: setup: add no-op check_systemd_nesting implementation for
+    unmanaged containers.
+
+  * setup: add no-op detect_architecture for unmanaged CTs.
+
+  * fix #7271: exclude non-volume mount points, like e.g. bind mounts, from
+    attribute preservation.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 06 Feb 2026 15:40:44 +0100
+
+pve-container (6.1.0) trixie; urgency=medium
+
+  * fix #7267: do not inherit host attributes for rootfs.
+
+  * config: support `uid`, `gid` and `groups` keys for `lxc.init` namespace.
+
+  * oci create: honor user defined in OCI image config.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Jan 2026 18:50:28 +0100
+
+pve-container (6.0.19) trixie; urgency=medium
+
+  * fix #7156: setup centOS/RHEL & derivatives: separate DNS list with
+    semicolons for better compatibility when multiple DNS server are
+    configured.
+
+  * ensure that container startup warnings are displayed even if startup fails
+    completely, as such warnings might provide additional context to a error
+    message.
+
+  * propagate pre-start-hook warnings to the start's task-log.
+
+  * fix #6897: warn that enabling cgroup nesting may be required for systemd.
+
+  * extend format description for the 'host-managed' network device option.
+
+  * Make mount points inherit the uid, gid, and access mode if the directory
+    already exists in the container file system.
+
+  * migrate: add missing newline to error messages.
+
+  * api: clone: improve error message to better reflect that a full-clone of a
+    running CT needs to use a snapshot as source, not that the CT just needs
+    to have (any) snapshots in general.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 24 Jan 2026 15:02:53 +0100
+
+pve-container (6.0.18) trixie; urgency=medium
+
+  * shell autocomplete: os templates: do not list VM backup archives for
+    restore.
+
+  * oci create: log volume directory creation.
+
+  * oci create: chroot into rootdir to contain creating volume directories.
+
+  * oci create: allow tabs in oci config
+
+  * config: allow tabs in values of environment variables and entrypoint
+    properties.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 18 Nov 2025 12:59:45 +0100
+
+pve-container (6.0.17) trixie; urgency=medium
+
+  * config: allow one to set empty environment variables.
+
+  * api: create VM: use ha-manager command to add container as an HA resource.
+
+  * fix regression breaking container restore from PBS.
+
+  * config: forbid using control characters for new entrypoint property.
+
+  * oci create: ensure values taken from image do not contain control
+    characters.
+
+  * create oci: best-effort create directories for data volumes inside the
+    containers file system tree.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 17 Nov 2025 21:32:11 +0100
+
+pve-container (6.0.16) trixie; urgency=medium
+
+  * config: forbid passing control characters in env property through the API.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 17 Nov 2025 10:31:32 +0100
+
+pve-container (6.0.15) trixie; urgency=medium
+
+  * add support to configure the runtime environment of a container. This
+    allows one to pass data down for basic configuration to the main init
+    process of a container.
+
+  * add initial support for enabling host-managed network for DHCP on
+    container network devices. With that flag enabled, the container itself
+    does not need to have any network management stack available anymore, as
+    a DHCP client from the host will be started in the network namespace of
+    the container on start to acquire a lease and setup network without any
+    interaction required from the container.
+
+  * add initial support to setup containers from archives in the OCI image
+    format (somewhat standardised "docker" images).
+    Application container work best if they are stateless, or can be
+    configured through the environment. If not, you might need to adapt the
+    container before you can use it. This can be either done in the OCI image
+    archive itself, or by mounting the container after creation, for example
+    with `pct mount VMID`. While the underlying implementation reuses the
+    battle tested Proxmox VE container toolkit as much as possible, the
+    integration itself can be currently considered a tech preview.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 16 Nov 2025 22:21:58 +0100
+
+pve-container (6.0.14) trixie; urgency=medium
+
+  * api: create/store: allow adding CT as HA resource after creation.
+
+  * fix #6897: document that systemd requires nesting.
+
+  * fix #6731: setup/suse: add support for openSUSE Leap 16.0.
+
+  * fix #5538: network: enable `accept_ra` (router advertisement) option for
+    DHCPv6 configurations.
+
+  * api: fix overly zealous permission check for guest net device without
+    bridge.
+
+  * status: rrd metrics: use fixed pve-vm-9.0 format path.
+
+  * fix #6613: relay purge param to HA stack when destroying a container.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Nov 2025 21:54:30 +0100
+
+pve-container (6.0.13) trixie; urgency=medium
+
+  * setup: switch network configuration from network-scripts to NetworkManager
+    for RHEL 10 and derivatives like CentOS Stream, AlmaLinux and Rocky Linux.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 15 Sep 2025 19:24:30 +0200
+
+pve-container (6.0.12) trixie; urgency=medium
+
+  * setup: Ubuntu: record support for future 25.10 and 26.04 LTS release.
+
+  * setup: Ubuntu, Debian: do not throw a hard error if version is unknown but
+    recent enough, only log a task warning about potential incompatibility.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 15 Sep 2025 18:19:04 +0200
+
+pve-container (6.0.11) trixie; urgency=medium
+
+  * setup: debian: regenerate snakeoil certificate and keypair for newly
+    created CTs.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 10 Sep 2025 21:40:34 +0200
+
+pve-container (6.0.10) trixie; urgency=medium
+
+  * config schema: update description for 'unprivileged' option to correctly
+    describe that it's now the default since Proxmox VE 9 and also describe
+    the behavior on restoration.
+
+  * api: rrd: fix creation of legacy PNG graphs, while Proxmox VE itself does
+    not uses them since a while, the API still exists and is used by our users
+    or integrators and it was not deprecated yet.
+
+  * setup: accept underscore when trying to parse the systemd version of a
+    container.
+
+  * setup: debian: increase upper supported version limit from <= 13 to < 15
+    to ensure all points releases of Debian 13 and future Debian 14 get
+    accepted.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 07 Sep 2025 16:38:29 +0200
+
+pve-container (6.0.9) trixie; urgency=medium
+
+  * api: migration checks: fix default value for "comigrated" HA
+    resources.
+
+  * api: migration checks: rename return prop to dependent-ha-resources and
+    improve description.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 01 Aug 2025 18:38:46 +0200
+
+pve-container (6.0.8) trixie; urgency=medium
+
+  * api: introduce migration preconditions api endpoint.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 31 Jul 2025 11:37:55 +0200
+
+pve-container (6.0.7) trixie; urgency=medium
+
+  * metrics: add pressure stall information to status
+
+  * RRD metrics: use new pve-storage-9.0 format RRD file location, if it
+    exists.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 31 Jul 2025 04:46:48 +0200
+
+pve-container (6.0.6) trixie; urgency=medium
+
+  * api: create CT: default to unprivileged containers.
+
+  * create/restore: require Sys.Modify for privileged containers except for
+    in-place restore where both the current and the backed-up config are
+    already privileged.
+
+  * migration: require Sys.Modify for incoming privileged containers.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 31 Jul 2025 01:59:09 +0200
+
+pve-container (6.0.5) trixie; urgency=medium
+
+  * seccomp config: adapt to new lxc-syscalld runtime directory with fallback
+    to previous path.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 30 Jul 2025 13:49:26 +0200
+
+pve-container (6.0.4) trixie; urgency=medium
+
+  * fix #6573: allow userns creation when nesting is enabled
+
+  * implement device hotplug. Note that currently hot-unplug or editing a
+    existing device is not yet supported.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 30 Jul 2025 13:00:51 +0200
+
+pve-container (6.0.3) trixie; urgency=medium
+
+  * fix #6538: apparmor: allow mqueue access for apparmor's 4.0 abi.
+
+  * setup: map 'rocky' and 'almalinux' os-release IDs to 'centos' early to
+    avoid unnecessary fallback detection.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Jul 2025 17:13:19 +0200
+
+pve-container (6.0.2) trixie; urgency=medium
+
+  * setup: remove deprecated DSA from ssh host key generation.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Jul 2025 02:31:05 +0200
+
+pve-container (6.0.1) trixie; urgency=medium
+
+  * config: whitelist lxc.init.cwd
+
+  * adopt perltidy also for executables without perl extension
+
+  * net: use new needs_fwbr helper
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Jul 2025 14:41:23 +0200
+
+pve-container (6.0.0) trixie; urgency=medium
+
+  * re-build for Debian 13 Trixie based Proxmox VE 9 releases.
+
+  * net: do not force network interface down if `link_down` is explicitly set
+    but 0
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Jun 2025 22:54:58 +0200
+
+pve-container (5.2.6) bookworm; urgency=medium
+
+  * api: return all active IP addresses of an interface.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Apr 2025 23:27:30 +0200
+
+pve-container (5.2.5) bookworm; urgency=medium
+
+  * fix #5907: ignore conflicting mount options for read-only mounts
+
+  * backup: implement backup and restore for external provider storage
+    plugins.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 06 Apr 2025 21:44:35 +0200
+
+pve-container (5.2.4) bookworm; urgency=medium
+
+  * vncproxy and termproxy: use common SSH info helpers when proxying
+    connections to pick up the pinned SSH host keys, instead of relying on
+    them being in the local root user's known hosts file.
+
+  * api: config: fix permission checks on change-detection for the case when
+    'nesting' feature was explicitly set to zero (disabled).
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 Feb 2025 17:00:21 +0100
+
+pve-container (5.2.3) bookworm; urgency=medium
+
+  * vmstatus: document more return types
+
+  * migration: allow rbd storages for remote migration
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Dec 2024 15:16:59 +0100
+
+pve-container (5.2.2) bookworm; urgency=medium
+
+  * network config: avoid committing invalid config on hotplug failure, rather
+    try rolling back to previous config
+
+  * setup: add support Ubuntu 24.10 and future 25.04
+
+  * setup centos & derivatives: hostname: only read sysconfig network if
+    exist. This fixes the support for Fedora 41 images.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 Nov 2024 14:02:54 +0100
+
+pve-container (5.2.1) bookworm; urgency=medium
+
+  * api status: add some missing descriptions in return schema
+
+  * fix #5761: add the "discard" mount option
+
+  * fix typos on user-visible strings
+
+  * fix #5762: lxc: setup: support `opensuse-slowroll` as OpenSUSE
+    flavor
+
+  * fix #5742: lxc: setup: centos template keep static ipv6 assignment
+
+  * fix #5720: add setup support for openEuler
+
+  * CentOS: disable some systemd units for sysfs debug mounts that
+    cannot work in containers
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 08 Nov 2024 16:00:46 +0100
+
+pve-container (5.2.0) bookworm; urgency=medium
+
+  * fix #5674: add missing 'proxyto' for LXC interfaces API
+
+  * fedora setup: drop checking for to new version, allowing 41 and newer
+    uncoditionally.
+
+  * backup: warn that tar does not honor exclusion pattern with a trailing
+    slash
+
+  * add 'deny-write' option for device passthrough to make said device
+    read-only
+
+  * api: improve CLI auto-completion of the storage parameter for the 'create'
+    and 'move-volume' commands such that it includes a storage only if it has
+    the 'rootdir' container content type enabled.
+
+  * add auto-completion of the storage parameter for the 'clone' command
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 10 Sep 2024 16:47:03 +0200
+
+pve-container (5.1.12) bookworm; urgency=medium
+
+  * backup: log errors from rsync
+
+  * d/control: relax versioned dependency for backup client again
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 18 Jun 2024 09:16:15 +0200
+
+pve-container (5.1.11) bookworm; urgency=medium
+
+  * remote migration: enable schema validation
+
+  * vzdump: conditionally set PBS change detection mode option
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 Jun 2024 13:58:17 +0200
+
+pve-container (5.1.10) bookworm; urgency=medium
+
+  * fix #5414: use proper percentages in `pct df`
+
+  * setup: support Ubuntu 24.04 Noble
+
+  * setup: unlink default netplan configuration even with Ubuntu >= 23.04
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 02 May 2024 14:37:10 +0200
+
+pve-container (5.0.11) bookworm; urgency=medium
+
+  * api: fix regression with locking and start-after-create
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 24 Apr 2024 14:28:00 +0200
+
+pve-container (5.0.10) bookworm; urgency=medium
+
+  * api: status: move config locking from API handler into the task worker to
+    avoid potentially blocking the API daemon
+
+  * fix #5160: fix move-mount regression for mount point hotplug
+
+  * api: container index: fix return type of vmid to ensure its an integer
+
+  * pct: fsck: also clean-up (unmap) any mounted volume when the fsck command
+    failed
+
+  * ensure that device passthrough changes do not get written to the config
+    even though they fail basic validation like if the device exists
+
+  * fix #4474: api: add overrule-shutdown parameter to stop endpoint
+
+  * fix #4846: avoid setting the deprecated noacl mount option on ext4
+
+  * firewall: add handling for new nftables based firewall implementation,
+  which currently is a opt-in drop-in replacement for the older iptables-
+  based one.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Apr 2024 20:33:01 +0200
+
+pve-container (5.0.9) bookworm; urgency=medium
+
+  * config: schema: remove duplicate attribute assignment for mpX
+
+  * fix #5194: pct: delete environment variables set by pve
+
+  * pct: drop completion helper for target storage on remote-migration
+
+  * pct: add keep-env option to the 'enter' and 'exec' command
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 Mar 2024 10:24:22 +0100
+
+pve-container (5.0.8) bookworm; urgency=medium
+
+  * sdn: pass vmid and hostname to allow requesting a new mapping
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Nov 2023 14:11:52 +0100
+
+pve-container (5.0.7) bookworm; urgency=medium
+
+  * allow passing raw device nodes through to containers
+
+  * recommend libpve-network-perl for SDN support
+
+  * initial support for dhcp ip allocation in dhcp-enabled SDN zones
+
+  - Proxmox Support Team <support@proxmox.com>  Tue, 21 Nov 2023 15:37:14 +0100
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Nov 2023 15:45:04 +0100
+
+pve-container (5.0.6) bookworm; urgency=medium
+
+  * api: network: add endpoint to get interfaces details like configured IPs
+
+  * setup: fix architecture detection for NixOS containers
+
+  * setup base: disable sysfs debug mounts via systemd presets, used by Debian
+    12+, Fedora 37+, CentOS 8+, ArchLinux and Ubuntu 23.04+.
+
+  * setup: handle getty services also via systemd-preset to avoid potential
+    glitches that happen only for the first boot. For example, Fedora 39 had
+    no console available during the first boot.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 19 Nov 2023 19:29:01 +0100
+
+pve-container (5.0.5) bookworm; urgency=medium
+
+  * fix #4765: pct: do not report cpu usage
+
+  * config permission check: also check access for currently configured
+    bridge
+
+  * fix #3460: restore: honor 'ignore-unpack-errors' flag for Proxmox Backup
+    Server backup source
+
+  * fix #3069: vzdump: add 'pbs-entries-max' parameter
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Sep 2023 16:51:24 +0200
+
+pve-container (5.0.4) bookworm; urgency=medium
+
+  * setup: fedora: fix regression with wrong systemd-networkd preset for
+    Fedora 37 and newer
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 24 Jun 2023 15:08:37 +0200
+
+pve-container (5.0.3) bookworm; urgency=medium
+
+  * migration: only migrate volumes used by the guest not also those
+    that are owned by them (VMID in name) but not referenced in the
+    config
+
+  * migration: fail when aliased volume are detected, as referencing the same
+    volume multiple times can lead to unexpected behavior in a migration.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 21 Jun 2023 13:05:04 +0200
+
+pve-container (5.0.2) bookworm; urgency=medium
+
+  * setup: systemd-network: use modern values for dhcp-modes, breaks
+    containers using systemd-network with a container systemd before v219
+    (released 2015). At that time most distros did not yet used systemd for
+    networking, but rather ifupdown, netplan or NetworkManager; and we require
+    CT distros to use systemd v232 or newer due to default unified cgroupv2
+    hierarchy anyway.
+
+  * fix #4515: template setup: remove bogus "LXC_NAME" line from /etc/hosts
+
+  * config modifications: fix hostname/DNS perm check
+
+  * do not enable system-networkd on first start for Debian 12 and newer,
+    which uses ifupdown by default, causing systemd-networkd-wait-online to
+    fail
+
+  * setup: enable systemd-networkd via preset for Arch Linux
+
+  * setup: enable systemd-networkd via preset for Ubuntu 23.04+
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Jun 2023 13:35:14 +0200
+
+pve-container (5.0.1) bookworm; urgency=medium
+
+  * network permissions: implement checks for using a bridge or vnet on
+    create container, update config, backup restore and clone
+
+  * fix #4457: actively set bridge MTU, if no MTU is defined in the config
+
+  * api: resize: fork before locking
+
+  * setup: fedora: support up to Fedora 40 for future proofing
+
+  * config: implement method to calculate derived properties from a config
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 09 Jun 2023 10:18:22 +0200
+
+pve-container (5.0.0) bookworm; urgency=medium
+
+  * rebuild for Debian 12 bookworm release series
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 25 May 2023 13:57:41 +0200
+
+pve-container (4.4-4) bullseye; urgency=medium
+
+  * setup: avoid writing truncated machine-id if it didn't exist
+
+  * memory: set cgroupv2 memory.high to ~99.6% of memory.max hard-limit
+
+  * memory: enforce memory.high also on hotplug changes
+
+  * start: warn in case of conflicting lxc.idmap entries
+
+  * various code improvements (avoiding declarations in conditional
+    statements)
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 25 May 2023 09:46:20 +0200
+
+pve-container (4.4-3) bullseye; urgency=medium
+
+  * fix #4460: setup: centos: create /etc/hostname if it does not exist
+
+  * fix #4470: pct fstrim: ignore bind and read-only mount points
+
+  * add a timeout when waiting for shutdown if lxc-stop fails
+
+  * restore: clean up config and firewall config after trying to restore
+    invalid archive
+
+  * add 'link_down' option to have container network interfaces "unplugged"
+
+  * allow riscv32/64 containers
+
+  * cleanup networking related code
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Mar 2023 15:56:32 +0100
+
+pve-container (4.4-2) bullseye; urgency=medium
+
+  * CentOS & derivates: also support all 9.x point releases
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 22 Nov 2022 10:25:30 +0100
+
+pve-container (4.4-1) bullseye; urgency=medium
+
+  * config: only save unique tags when updating them via the API
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Nov 2022 08:37:39 +0100
+
+pve-container (4.3-6) bullseye; urgency=medium
+
+  * setup: fix using non-plugin methods to avoid breaking unmanaged CTs
+
+  * network: let the common tap-plug helper add fdb entries, if needed and
+    supported.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 20 Nov 2022 16:33:52 +0100
+
+pve-container (4.3-5) bullseye; urgency=medium
+
+  * enable systemd-networkd per preset in fedora 37+
+
+  * fix #4355: d/control: depend on binutils to ensure objdump is available
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 19 Nov 2022 11:39:49 +0100
+
+pve-container (4.3-4) bullseye; urgency=medium
+
+  * improve edge-case parsing and limits for CT networking MTU
+
+  * assert that the user can indeed set/remove any changed tag
+
+  * migration: add remote migration foundations including new pct
+    'remote-migrate' CLI command
+
+  * migrate: print mapped volume in error
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Nov 2022 15:02:15 +0100
+
+pve-container (4.3-3) bullseye; urgency=medium
+
+  * setup: relax matching when detecting systemd version
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Nov 2022 17:50:52 +0100
+
+pve-container (4.3-2) bullseye; urgency=medium
+
+  * setup: get init path: switch to resolving link recursively to cope with
+    distros that use a relative symlink for /sbin/init
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Nov 2022 16:53:26 +0100
+
+pve-container (4.3-1) bullseye; urgency=medium
+
+  * config: cpuunits: drop description for outdated special value
+
+  * clamp cpu unit value to the value range of the currently booted
+    cgroup controller
+
+  * fix #4228: add start parameter to rollback endpoint for automatic
+    restarting of CT
+
+  * fix #4192: revamp check for systemd version, avoiding some false-
+    positives
+
+  * fix #3606: drop --inplace from suspend backups
+
+  * net: implement support for bridge disable mac learning by manually
+    registering FDB entries in that case
+
+  * devuan: add preliminary support for Devuan 12 Daedalus
+
+  * fedora: support 37 and add pre-liminary support for 38
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 13 Nov 2022 15:27:55 +0100
+
+pve-container (4.2-3) bullseye; urgency=medium
+
+  * fix #4164: use DHCP=yes instead of DHCP=both in systemd-networkd config
+
+  * apply pending mountpoint: also hotplug non-volume mount points
+
+  * support Ubuntu 22.10 Kinetic Kudu
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 21 Oct 2022 14:56:59 +0200
+
+pve-container (4.2-2) bullseye; urgency=medium
+
+  * fix #4088: ignore systemd minor version
+
+  * fix an issue with volume deactivation when moving volumes
+
+  * fix an issue where when failing to clone a container due to it being
+    locked empty left-over configs would remain
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 05 Jul 2022 09:23:09 +0200
+
+pve-container (4.2-1) bullseye; urgency=medium
+
+  * prestart & poststop hook: init REST environment, for example to fix volume
+    activation on external Ceph RBD storages
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 04 May 2022 08:36:45 +0200
+
+pve-container (4.1-5) bullseye; urgency=medium
+
+  * setup: add basic NixOS support
+
+  * migrate: set the target storage id also for unreferenced disks
+
+  * fix #3424: vzdump: cleanup: wait for active replication
+
+  * fix #3424: api: snapshot delete: wait for active replication
+
+  * fix #3917: pct: Ignore fstrim failure in CLI fstrim command
+
+  * fix #3960: properly set owner in CT setup
+
+  * api: create/modify: add content type checks
+
+  * api: reassign volume: allow to reassign to own CT
+
+  * initial support for Fedora 36
+
+  * setup: allow hostname configuration on NixOS
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Apr 2022 19:01:34 +0200
+
+pve-container (4.1-4) bullseye; urgency=medium
+
+  * snapshot: implement new activate storage helper
+
+  * fix #1532: add target-storage support to migration
+
+  * fix #3635: fix overly-strict pool permission check on create
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 11 Feb 2022 16:18:45 +0100
+
+pve-container (4.1-3) bullseye; urgency=medium
+
+  * setup: support upcoming Ubuntu 22.04 Jammy Jellyfish
+
+  * config: allow 'lazytime' mount option for containers
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 07 Dec 2021 19:10:54 +0100
+
+pve-container (4.1-2) bullseye; urgency=medium
+
+  * rollback: improve interaction with snapshot replication
+
+  * cli: pct: rename 'move_volume' command to 'move-volume' with an alias for
+    backward compatibility
+
+  * api: move-volume: add move to another container
+
+  * fix #3721: better version check to avoid false-positive on the check if a
+    Alpine Linux in the container is new enough to support the CIDR format.
+    Fixes static addresses on some old, already EOL, Alpine Linux versions
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 12 Nov 2021 19:21:22 +0100
+
+pve-container (4.1-1) bullseye; urgency=medium
+
+  * setup: untaint path to host timezone
+
+  * setup: also set contents of /etc/timezone
+
+  * fix #3673: setup: add support for upcomming Ubuntu 21.10 Impish Indri
+    containers
+
+  * add support for upcomming Fedora 35
+
+  * api: clone: don't include snapshot related properties in the target
+    config, similar to the VM clone API endpoint.
+
+  * restore: sanitize config: use task log warn method to record that Proxmox
+    VE could not restore the container 1:1 if the config contained special
+    `lxc.` keys and the user is not root.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 14 Oct 2021 13:12:58 +0200
+
+pve-container (4.0-11) bullseye; urgency=medium
+
+  * fix support for unmanaged containers
+
+  * pct status: mark suspend as experimental
+
+  * destroy: remove pending volumes as well
+
+  * setup: drop copying binfmt qemu-static executable for cross-architecture
+    containers, that should be handled by the kernel opening the binfmt helper
+    immediately on registering.
+
+  * setup: alpine: also use CIDR format for newer versions (>= 3.13)
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 07 Oct 2021 08:17:44 +0200
+
+pve-container (4.0-10) bullseye; urgency=medium
+
+  * centos (and derivatives): set locale.conf to c.UTF-8 if it does not yet
+    exists on template extraction. This avoids systemd-firstboot hanging due
+    to prompting the user on a disconnected console.
+
+  * opensuse: pre-set locale/timezone to avoid systemd-firstboot hang on
+    prompt in a similar spirit as with centos above
+
+  * partially fix #3471: setup: centos: net: add missing UUID to ifcfg to
+    improve compatibility with NetworkManager (the default since CentOS 8)
+
+  * partially fix #3471: setup: centos: net: fix avoid setting the IPV6ADDR
+    config option to the literal "auto" for SLAAC
+
+  * partially fix #3471: setup: centos: net: set DNS also per iface config
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 29 Sep 2021 22:14:19 +0200
+
+pve-container (4.0-9) bullseye; urgency=medium
+
+  * pct cpuset: use limiting cgroup
+
+  * pct cpuset: show effective values
+
+  * fix #3478: abort container creation on arch detection timeout
+
+  * allow nesting to be changed for VM.Allocate on unprivileged containers
+
+  * skip features when restoring an unprivileged container as privileged
+
+  * api: limit priv -> unpriv change on container restore to VM.Allocate
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 5 Aug 2021 16:10:12 +0200
+
+pve-container (4.0-8) bullseye; urgency=medium
+
+  * config: sync storage ACL checks with qemu-server
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 8 Jul 2021 12:29:36 +0200
+
+pve-container (4.0-7) bullseye; urgency=medium
+
+  * fix #3506: config: fix removing the cpulimit of a running CT
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 06 Jul 2021 15:48:14 +0200
+
+pve-container (4.0-6) bullseye; urgency=medium
+
+  * ensure container config dir exists before trying to write seccomp config
+    files to it
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 06 Jul 2021 08:27:12 +0200
+
+pve-container (4.0-5) bullseye; urgency=medium
+
+  * start: detect and log possible problematic (old) container when running
+    with new default, pure cgroup v2 setup.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 05 Jul 2021 18:56:13 +0200
+
+pve-container (4.0-4) bullseye; urgency=medium
+
+  * cgroupv2: restore usual devices controller behavior via ia userns.conf.d/
+    file
+
+  * disable btrfs ioctls for unprivileged containers via seccomp
+
+  * fix subvolume creation on btrfs where quotas are used
+
+  * bump minimum required lxc-pve version to 4.0.9-2
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 05 Jul 2021 09:57:25 +0200
+
+pve-container (4.0-3) bullseye; urgency=medium
+
+  * pct CLI: correctly handle 'warnings' task status
+
+  * fix #3421: only rely on the storage content-type to check if it can host
+    container. This allows custom storage plugins to support 'rootfs' images
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 24 Jun 2021 08:08:30 +0200
+
+pve-container (4.0-2) bullseye; urgency=medium
+
+  * api: vmstatus: make template property optional
+
+  * migrate: remove deprecated force parameter
+
+  * configure cpu/cpuset/memory cgroupv2 values
+
+  * pct exec: explicitly check if container is running at the PVE side already
+
+  * config: limit description/comment length to 8 KiB
+
+  * clone: clear the cloned containers `/etc/machine-id` when systemd is in
+    use, or that file exists. This ID needs to be unique as else various
+    issues, like MAC address duplications on Linux bridges, can happen
+
+  * migrate: enforce that rootdir content type is available
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Jun 2021 10:40:39 +0200
+
+pve-container (4.0-1) bullseye; urgency=medium
+
+  * re-build for Proxmox VE 7 / Debian Bullseye
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 13 May 2021 14:02:10 +0200
+
+pve-container (3.3-5) pve; urgency=medium
+
+  * backup: keep CT template status also for non-root restores
+
+  * fix #3313: restore: use unprivileged status from backup archive config as
+    default for restored CT
+
+  * pct push: do not mistakenly recognize the zero root UID/GID value as error
+
+  * setup: fedora: allow upcoming Fedora 34
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 20 Apr 2021 14:13:37 +0200
+
+pve-container (3.3-4) pve; urgency=medium
+
+  * fix #3176: allow development Devuan versions, improve version detection
+
+  * fix restore of containers with 'devuan' as ostype
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 17 Feb 2021 08:59:25 +0100
+
+pve-container (3.3-3) pve; urgency=medium
+
+  * make formatting image with ext4 less noisy
+
+  * api: destroy: add 'destroy-unreferenced-disks' parameter
+
+  * use monitor commands to freeze on pure-v2 setups
+
+  * restore: add more informational messages
+
+  * fix #3275: remove old FW config when restoring
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 28 Jan 2021 17:12:35 +0100
+
+pve-container (3.3-2) pve; urgency=medium
+
+  * improve restoring PBS archive: avoid missing restore of firewall config
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Dec 2020 12:49:29 +0100
+
+pve-container (3.3-1) pve; urgency=medium
+
+  * d/rules: do not try to start or enable system-pve\x2dcontainer.slice on
+    update
+
+  * CGroups: re-use factored-out PVE::CGroup module as base
+
+  * deactivate volumes after storage migrate
+
+  * vzdump: allow relative exclude patterns for snapshot and stop mode, to make
+    the behavior consistent across all backup modes
+
+  * vzdump: pass along exclude patterns to proxmox-backup-client
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 25 Nov 2020 13:51:03 +0100
+
+pve-container (3.2-4) pve; urgency=medium
+
+  * fix #3161: snapshot creation: only check volumes for fsfreeze
+
+  * setup: Devuan: add support for stable Beowulf and testing Chimaera
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 23 Nov 2020 19:47:44 +0100
+
+pve-container (3.2-3) pve; urgency=medium
+
+  * improve numbering scheme detection for CentOS Stream releases
+
+  * pct fstrim: add 'ignore-mountpoints' parameter
+
+  * add support for Fedora 33
+
+  * add support for Ubuntu 20.10 Groovy Gorilla
+
+  * fix #2991, #2528: snapshot creation: fsfreeze mountpoints, if underlying FS
+    requires it
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Nov 2020 16:41:00 +0100
+
+pve-container (3.2-2) pve; urgency=medium
+
+  * fix #2938: increase limit of max cores from 128 to 8192
+
+  * fix #3016: clone: do not copy snapshot config
+
+  * skip additional virtual filesystems when sycing a containers namespace
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 22 Sep 2020 10:54:10 +0200
+
+pve-container (3.2-1) pve; urgency=medium
+
+  * improve feedback for failed Container startup
+
+  * allow one to enable debug level logging to the start task log
+
+  * setup: add kali-rolling as supported release
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Sep 2020 21:21:15 +0200
+
+pve-container (3.1-13) pve; urgency=medium
+
+  * do the activation of storage volumes outside of the containers mount
+    namespace to avoid issues when it's required to activate the underlying
+    storage
+
+  * fix passing the offline storage migration bandwidth limit
+
+  * fix #2790: volume resize: fix API behavior in the case where the disk
+    volume has already the exact size requested
+
+  * allow one to configure up to 32 network interfaces
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 27 Aug 2020 12:48:18 +0200
+
+pve-container (3.1-12) pve; urgency=medium
+
+  * backup: reduce verbosity of logging when syncing filesystems in snapshot
+    mode
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 24 Jul 2020 11:42:23 +0200
+
+pve-container (3.1-11) pve; urgency=medium
+
+  * fix #2820: don't hotplug over existing mpX
+
+  * setup/debian: use CIDR for Debian Buster and newer
+
+  * vzdump: set heuristic task size information for Proxmox Backup Server
+    target storage
+
+  * cgroup: get old swap value when hotplugging only memory
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 13 Jul 2020 13:32:55 +0200
+
+pve-container (3.1-10) pve; urgency=medium
+
+  * improve snapshot mode backups with a Proxmox Backup Server as target
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 09 Jul 2020 18:12:11 +0200
+
+pve-container (3.1-9) pve; urgency=medium
+
+  * fix #2778: use vm_start instead of systemctl to start/restart
+    container
+
+  * add helper to get reason for mounpoint backup exclusion
+
+  * fix #1423: add timezone config option
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 09 Jul 2020 13:55:45 +0200
+
+pve-container (3.1-8) pve; urgency=medium
+
+  * lxc: fall back to unmanaged when no OS detected and no /etc/os-
+    release file found
+
+  * adapt network create hook to new pve-network version, if installed
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 08 Jun 2020 17:39:27 +0200
+
+pve-container (3.1-7) pve; urgency=medium
+
+  * fix #2655: setup securetty during template fixup also for centos version
+     7 and newer
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 28 May 2020 15:29:13 +0200
+
+pve-container (3.1-6) pve; urgency=medium
+
+  * avoid using LXC CLI tools for CT freeze/unfreeze and improve support for
+    both cgroups v1 and v2 freezer
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 May 2020 16:21:19 +0200
+
+pve-container (3.1-5) pve; urgency=medium
+
+  * fix: #2124 add zstd
+
+  * create_vm: avoid premature write_config caused by update_pct_config
+
+  * api/destroy: repeat early checks after locking
+
+  * vzdump: use new pbs option
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 5 May 2020 11:23:42 +0200
+
+pve-container (3.1-3) pve; urgency=medium
+
+  * add 'force' to destroy-vm to allow destroying running containers
+
+  * whitelist lxc.cgroup2.* raw keys
+
+  * consider lxc.cgroup2.cpuset.cpus as an explicit cpuset to not try to
+    override it with a cgroupv1 entry
+
+  * support cpuset cgroupv2 controller for writing lxc configs
+
+  * improve cgroup controller version discovery
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 29 Apr 2020 11:22:13 +0200
+
+pve-container (3.1-2) pve; urgency=medium
+
+  * Use foreach_volume instead of foreach_mountpoint-variants
+
+  * Use parse_volume instead of parse_ct-variants
+
+  * Use new storage_migrate interface
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 9 Apr 2020 08:50:54 +0200
+
+pve-container (3.1-1) pve; urgency=medium
+
+  * rework cgroup handling for initial cgroupv2 support
+
+  * add required configuration changes for lxc-4.0 with now-upstream container
+    cgroup isolation
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 06 Apr 2020 14:14:50 +0200
+
+pve-container (3.0-24) pve; urgency=medium
+
+  * For clone+copy features, make sure a valid format for the target is supported
+
+  * Rely on template_create to check whether creating a template is possible
+
+  * fix #1904: convert to base image when moving a volume of a template
+
+  * move_volume: if deleting old volume fails, add it as unused
+
+  * VZDump: mark template disks as ro
+
+  * Implement volume-related helpers and use new foreach_volume
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 30 Mar 2020 09:35:57 +0200
+
+pve-container (3.0-23) pve; urgency=medium
+
+  * lxc_config: mount /sys as mixed for unprivileged by default to avoid
+    issues with recent systemd versions running inside the container
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Mar 2020 19:02:48 +0100
+
+pve-container (3.0-22) pve; urgency=medium
+
+  * Fix mounting ZFS snapshots whose dataset is not mounted below '/'
+
+  * fix #2580: api/delete: drop CT from HA resources if purge is set
+
+  * setup: warn on unknown os-release ID
+
+  * allow restoring non-volume backups again
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Mar 2020 09:09:45 +0100
+
+pve-container (3.0-21) pve; urgency=medium
+
+  * fix #2611: use correct operation in get_bandwidth_limit for migration limit
+
+  * setup/ubuntu: add upcoming 20.04 focal release
+
+  * vzdump: add support for proxmox backup server
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Mar 2020 12:00:48 +0100
+
+pve-container (3.0-20) pve; urgency=medium
+
+  * add mknod feature flag
+
+  * set lxc.seccomp.notify.cookie to the vmid
+
+  * llow reading snapshot config for VM.Audit
+
+  * fix #2598: activate volumes before mounting in stop mode backup
+
+  * apply pending: do cleanup pending between, not during, change/delete loop
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 20 Feb 2020 13:59:00 +0100
+
+pve-container (3.0-19) pve; urgency=medium
+
+  * fix fsck command for ceph RBD backed volumes, map and unmap them
+
+  * fix #2560: adapt some sysctl values for high CT counts
+
+  * fix #2568: hotplug: fix typo for 'cpu.shares'
+
+  * setup: allow all Centos 8.x stable versions
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 27 Jan 2020 18:53:00 +0100
+
+pve-container (3.0-18) pve; urgency=medium
+
+  * undo the display change from 3.0-17 for now
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Jan 2020 09:29:23 +0100
+
+pve-container (3.0-17) pve; urgency=medium
+
+  * enable centos 8.1 containers
+
+  * more consistent display of unnamed containers (add a space between 'CT'
+    and the number)
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Jan 2020 08:44:38 +0100
+
+pve-container (3.0-16) pve; urgency=medium
+
+  * replace the deprecated DHCP=none with DHCP=no in .network units on systemd
+    based containers
+
+  * fix an issue where when debugging container startup running them directly
+    via `lxc-start` instead of `pct start`, the prestart hook would mount
+    containers relative to the current working directory instead of where
+    they're supposed to be mounted
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 02 Jan 2020 09:37:08 +0100
+
+pve-container (3.0-15) pve; urgency=medium
+
+  * fix #2512: post-stop: unmount stage mps before cleanup
+
+  * post-stop-hook: unmount before deactivating storages
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Dec 2019 16:04:39 +0100
+
+pve-container (3.0-14) pve; urgency=medium
+
+  * fix bindmounting with staged mount points
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 26 Nov 2019 18:27:41 +0100
+
+pve-container (3.0-13) pve; urgency=medium
+
+  * move applying pending changes from pre-start to post-stop, as we can
+    regenerate the LXC config safely there.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 22 Nov 2019 09:52:53 +0100
+
+pve-container (3.0-12) pve; urgency=medium
+
+  * implement CT mountpoint hotplugging, for host running 5.3 or newer Linux
+    kernel
+
+  * implement container reboot over API and CLI
+
+  * add 'tags' config option for adding meta information to CT
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 20 Nov 2019 19:27:34 +0100
+
+pve-container (3.0-11) pve; urgency=medium
+
+  * add PVE::LXC::Tools
+
+  * change hooks to use new helper
+
+  * config: whitelist lxc.hook.version
+
+  * fix #2453: actually reflect random MAC address selection in config
+
+  * fix #2456 setting bind-mount through API/CLI is broken
+
+  * improve test reliability in absence of running pmxcfs
+
+  * follow refactoring in pve-cluster
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Nov 2019 12:08:15 +0100
+
+pve-container (3.0-10) pve; urgency=medium
+
+  * support Fedora 31 as Container distribution
+
+  * minor adaptions of pending changed related code
+
+  * setup: move host architecture translation from pve-common to container
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Oct 2019 07:32:43 +0100
+
+pve-container (3.0-8) pve; urgency=medium
+
+  * fix issue where TTYs aren't correctly set after restore
+
+  * ensure that lxc.* entries are restored only once
+
+  * add Ubuntu 19.10 Eoan as supported
+
+  * fix #2412: ct destroy: only delete config after deleted from pools and
+    Firewall
+
+  * implement basic pending changes for running containers
+
+  * fix #1291: add purge option for destroy vm api call, allows one to remove
+    any reference of this CT from backup and replication jobs.
+
+  * add check to resize disk if current size could not be determined
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Oct 2019 22:04:12 +0200
+
+pve-container (3.0-7) pve; urgency=medium
+
+  * mountpoints: create parent dirs with correct owner
+
+  * setup: allow CentOS 5 and CentOS 8
+
+  * do not leave fstrim lock if initial mount-all-volumes procedure
+    fails
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Sep 2019 07:21:18 +0200
+
+pve-container (3.0-5) pve; urgency=medium
+
+  * vzdump: always add (empty) firewall config and improve handling of
+    restoring it from archive
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 26 Jul 2019 12:34:32 +0200
+
+pve-container (3.0-4) pve; urgency=medium
+
+  * setup CT getty: ensure the getty.target is not masked and improve the logic
+    which ensures that only the correct getty services are enabled
+
+  * fix #1042: inotify: increase watches, instances & queue default
+    limits
+
+  * remove obsolete lxc@.service.d
+
+  * config: whitelist lxc.seccomp.notify.proxy/cookie
+
+  * add support for debian bullseye/sid
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Jul 2019 16:03:22 +0200
+
+pve-container (3.0-3) pve; urgency=medium
+
+  * fix #1451: allow one to add mount options to CT mountpoints
+
+  * fix #2270: allow custom lxc options to be restored as root
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Jul 2019 19:25:12 +0200
+
+pve-container (3.0-2) pve; urgency=medium
+
+  * Fix #576: Fix dangling files for Move Disk
+
+  * restore_archive: check if compression_map format is undefined
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Jun 2019 18:37:35 +0200
+
+pve-container (3.0-1) pve; urgency=medium
+
+  * Bump version for Debian Buster / PVE 6.0
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 May 2019 12:41:01 +0200
+
+pve-container (2.0-39) unstable; urgency=medium
+
+  * fix #2027: do not disable IPV6_AUTOCONF on centos
+
+  * fix #2200: vm_stop: add nokill-after-timeout parameter
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 15 May 2019 16:37:58 +0200
+
+pve-container (2.0-38) unstable; urgency=medium
+
+  * fix: #1075: Correctly restore CT templates form backup
+
+  * raise supported fedora version to 30
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 07 May 2019 11:11:57 +0000
+
+pve-container (2.0-37) unstable; urgency=medium
+
+  * setup: fix alpine ipv6-slaac configuration
+
+  * add lock information to CT status call
+
+  * fix #1607: implement pct fstrim
+
+  * fix #2147: re-add support for current opensuse tumbleweed
+
+  * fix: #1218 Add flag 'unique' to pct restore in order to set new MAC
+    addresses to NICs
+
+  * storage migrate: add bwlimit parameter
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 04 Apr 2019 16:24:33 +0200
+
+pve-container (2.0-36) unstable; urgency=medium
+
+  * Fix #2109: map volumes explicitly if resizing a stopped container
+
+  * config: hwaddr: enforce unicast MAC addresses
+
+  * setup: add initial support for Ubuntu 19.04 Disco Dingo
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 Mar 2019 12:37:34 +0100
+
+pve-container (2.0-35) unstable; urgency=medium
+
+  * fix #2080: fix device encoding in the prestart hook
+
+  * fix #2086: change process checking mechanism in vmstatus
+
+  * fix #2104: config "features: mount" regex pattern
+
+  * fix #1891: Add zsh command completion generation for pct
+
+  * fix #2117: don't keep custom idmap in pct pipe restore
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 Mar 2019 08:11:24 +0100
+
+pve-container (2.0-34) unstable; urgency=medium
+
+  * fix #889: api create: reserver config with create lock early
+
+  * fix #1924: add snapshot parameter
+
+  * add pre- start/stop hookscript
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 01 Feb 2019 13:12:10 +0100
+
+pve-container (2.0-33) unstable; urgency=medium
+
+  * whitelist namespaced lxc.sysctl.* entries
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Jan 2019 15:36:18 +0100
+
+pve-container (2.0-32) unstable; urgency=medium
+
+  * fix #2014: don't check if unpriv for blkio
+
+  * fix #2028: keep custom uid mapping during restore
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Jan 2019 13:45:47 +0100
+
+pve-container (2.0-31) unstable; urgency=medium
+
+  * fix #1234: pct: implement rescan
+
+  * allow using 'fuse' file systems in a container thorugh a new feature flag
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Nov 2018 12:54:20 +0100
+
+pve-container (2.0-30) unstable; urgency=medium
+
+  * fix #1808: readonly mount source disk
+
+  * support Fedora 29
+
+  * call map_volume before using volumes
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 09 Nov 2018 17:33:43 +0100
+
+pve-container (2.0-29) unstable; urgency=medium
+
+  * add Ubuntu 18.10 (Cosmic Cuttlefish) support
+
+  * close #1940: pct console: added ability to specify escape sequence
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Oct 2018 10:24:35 +0200
+
+pve-container (2.0-28) unstable; urgency=medium
+
+  * configure IPv6AcceptRA in systemd-networkd files
+
+  * enable emulation of containers using qemu-user-static
+
+  * add feature flags (for now: mount, nesting, keyctl) using apparmor
+    profile generation
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 03 Oct 2018 16:45:56 +0200
+
+pve-container (2.0-27) unstable; urgency=medium
+
+  * fix #1885: delete old route when changing gateway
+
+  * fix #1874: autodev hook: setup devices cgroup
+
+  * fix #1897: bump MAX_MOUNT_POINTS to 256
+
+  * config: add missing lock types to schema
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 13 Sep 2018 11:19:19 +0200
+
+pve-container (2.0-26) unstable; urgency=medium
+
+  * fix #1851: check 'replicate' flag for non-volume mountpoints
+
+  * document more API return properties
+
+  * use SHA-512 for container passwords
+
+  * add support for openSUSE Leap 15.0
+
+  * add fqdn to /etc/hosts even with no ip
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 Aug 2018 13:56:46 +0200
+
+pve-container (2.0-25) unstable; urgency=medium
+
+  * deal with disabled cgroup subsystems
+
+  * use systemd-networkd for newer Fedora containers
+
+  * fix #1844: check /etc/.pve-ignore.hosts early
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 30 Jul 2018 09:19:42 +0200
+
+pve-container (2.0-24) unstable; urgency=medium
+
+  * correctly handle extra mounpoints when creating a template
+
+  * fix #1786: check for shared storage on clone
+
+  * fix #1792: Do not assign vars in conditional statement
+
+  * fix #1778: check if storage support templates
+
+  * api create: allow auto start of container after create finished
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Jun 2018 09:10:35 +0200
+
+pve-container (2.0-23) unstable; urgency=medium
+
+  * rescan volume size when attaching unused volume
+
+  * support Fedora 28
+
+  * fix #1721: unmount containers before trying to mount them
+
+  * rescan volume zie when copying volume
+
+  * add cifs as allowed storage type
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 14 May 2018 11:09:39 +0200
+
+pve-container (2.0-22) unstable; urgency=medium
+
+  * add Ubuntu 18.04 to known versions
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 23 Apr 2018 11:04:59 +0200
+
+pve-container (2.0-21) unstable; urgency=medium
+
+  * create: fix passing of template file descriptor
+
+  * restore: support i/o rate limiting
+
+  * fix #1704: get container uptime with /proc/<pid>/stat
+
+  * fix skiplock for pct start
+
+  * clone: randomize network MAC HW address of clone
+
+  * clone: implement target parameter
+
+  * implement full clone
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Mar 2018 09:14:19 +0100
+
+pve-container (2.0-20) unstable; urgency=medium
+
+  * Fix #1547: on migration abort, the CT starts again
+
+  * seperate serachdomain and nameserver config
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 12 Mar 2018 13:24:08 +0100
+
+pve-container (2.0-19) unstable; urgency=medium
+
+  * close #1668: add Devuan support
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Feb 2018 06:12:06 +0100
+
+pve-container (2.0-18) unstable; urgency=medium
+
+  * add termproxy api call
+
+  * setup/fedora: we support fedora release 27
+
+  * pct mount: tell user where they can find the mounted files
+
+  * vzdump: fix visibility of warning about lack of xattr/acl support on nfs
+
+  * use systemd-networkd for ubuntu >= 17.10
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 13 Dec 2017 14:57:46 +0100
+
+pve-container (2.0-17) unstable; urgency=medium
+
+  * migrate: skip replication handling if not replicated
+
+  * migrate: only restart if conf was moved
+
+  * add vm_stop helper
+
+  * switch to pve-container@ unit
+
+  * fixes #1227: include ns/ dir in read_cgroup_value
+
+  * VM.Snapshot.Rollback privilege added
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Oct 2017 15:11:19 +0200
+
+pve-container (2.0-16) unstable; urgency=medium
+
+  * fix #1253: show ssh key fingerprints again
+
+  * fix #1464: setup/suse: support SLES 12 container
+
+  * close #1478: add check for unsupported config
+
+  * config: update for lxc-2.1
+
+  * API/clone: do not overwrite global signal handlers
+
+  * setup/fedora: use os_release and support 26
+
+  * fix os-release mapping for similar flavoured distros
+
+  * setup: recognize 'sles' os_release ID
+
+  * setup/suse: support tumbleweed container
+
+  * setup/suse: check early if setting up the ct getty service is needed
+
+  * setup/suse: use new os_release_var to simplify version detection
+
+  * use /etc/os-release
+
+  * setup: add a additional mapping for archlinux
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 12 Sep 2017 13:48:50 +0200
+
+pve-container (2.0-15) unstable; urgency=medium
+
+  * support debian 9.1
+
+  * recognize debian buster/sid
+
+  * recognize ubuntu 17.10
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Jul 2017 09:17:03 +0200
+
+pve-container (2.0-14) unstable; urgency=medium
+
+  * allow disks on shared storages on replicated VMs
+
+  * refuse to add non-replicatable disks to replicating VMs
+
+  * API HA tasks: we request states not execute them
+
+  * use COMMON_TAR_FLAGS from pve-storage
+
+  * create: open templates as real root
+
+  * remove unused next_free_nbd_dev function
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 28 Jun 2017 12:50:37 +0200
+
+pve-container (2.0-13) unstable; urgency=medium
+
+  * migrate: pass the with_snapshots parameter
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Jun 2017 12:56:02 +0200
+
+pve-container (2.0-12) unstable; urgency=medium
+
+  * PVE::LXC::Migrate - use replication job, transfer replication state
+
+  * get_replicatable_volumes: add additional tests
+
+  * src/PVE/API2/LXC.pm: aquire guest_migration_lock inside worker
+
+  * Add a migration lock to avoid a replication on rollback-time
+
+  * PVE::LXC::Config - implement $cleanup flag for get_replicatable_volumes
+
+  * migrate: implement insecure storage migration
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Jun 2017 09:10:56 +0200
+
+pve-container (2.0-11) unstable; urgency=medium
+
+  * support width and height parameter for vncproxy
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 02 Jun 2017 09:16:11 +0200
+
+pve-container (2.0-10) unstable; urgency=medium
+
+  * migrate: aquire guest_migration_lock during
+
+  * use new PVE::ReplicationConfig
+
+  * do not allow destroy if there are replication jobs
+
+  * use Syscall module instead of raw syscall numbers
+
+  * migrate: pass ssh_info to storage_migrate
+
+  * tests: fix broken snapshot delete tests
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 31 May 2017 09:31:14 +0200
+
+pve-container (2.0-9) unstable; urgency=medium
+
+  * correctly handle passwords with utf8 wide characters
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 02 May 2017 11:50:10 +0200
+
+pve-container (2.0-8) unstable; urgency=medium
+
+  * add support for Ubuntu 17.04 (zesty)
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 02 May 2017 07:00:13 +0200
+
+pve-container (2.0-7) unstable; urgency=medium
+
+  * whitelisted lxc.limit.* config entries usable with the next lxc release
+
+  * added storage replication settings
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Apr 2017 13:59:28 +0200
+
+pve-container (2.0-6) unstable; urgency=medium
+
+  * support opensuse >= 42
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 06 Apr 2017 06:28:07 +0200
+
+pve-container (2.0-4) unstable; urgency=medium
+
+  * add console fix for debian containers using systemd
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Mar 2017 12:57:05 +0100
+
+pve-container (2.0-3) unstable; urgency=medium
+
+  * don't try to create the deprecated rsa1 ssh keys
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 14 Mar 2017 09:27:22 +0100
+
+pve-container (2.0-2) unstable; urgency=medium
+
+  * improved reboot container fix
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 10 Mar 2017 13:50:21 +0100
+
+pve-container (2.0-1) unstable; urgency=medium
+
+  * rebuild for PVE 5.0 / Debian Stretch
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 9 Mar 2017 15:27:11 +0100
+
+pve-container (1.0-95) unstable; urgency=medium
+
+  * correctly handle reboots within containers
+
+  * improve locale handling in vnc console
+
+  * fix architecture detection in restore_archive
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 9 Mar 2017 15:19:33 +0100
+
+pve-container (1.0-94) unstable; urgency=medium
+
+  * fix #1153: improve behavior when entering unicode in passwords prompts
+
+  * use the lxc@.service unit to start containers to avoid issues with
+    pvedaemon restarts.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 02 Feb 2017 14:13:10 +0100
+
+pve-container (1.0-93) unstable; urgency=medium
+
+  * add dependency on libpve-guest-common-perl
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 25 Jan 2017 09:40:19 +0100
+
+pve-container (1.0-92) unstable; urgency=medium
+
+  * use new PVE::Storage::check_volume_access()
+
+  * fix #1253: display SSH fingerprints on CT setup
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Jan 2017 09:17:56 +0100
+
+pve-container (1.0-91) unstable; urgency=medium
+
+  * add setup_environment hook to CLIHandler class
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 12 Jan 2017 13:21:24 +0100
+
+pve-container (1.0-90) unstable; urgency=medium
+
+  * skip unprivileged config parameter when restoring a container (revert
+    previos patch)
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 27 Dec 2016 09:02:41 +0100
+
+pve-container (1.0-89) unstable; urgency=medium
+
+  * supress warning when we try to delete a non-existent option
+
+  * fix #1226: show the right amount of memory usage
+
+  * fix #1225: restore without config changes for VMUser
+
+  * document bind/device mp permissions better
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 21 Dec 2016 11:56:17 +0100
+
+pve-container (1.0-88) unstable; urgency=medium
+
+  * setup: allow fedora 22-25
+
+  * setup: more general approach to tty paths
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 09 Dec 2016 10:13:12 +0100
+
+pve-container (1.0-87) unstable; urgency=medium
+
+  * implement lxc restart migration
+
+  * VZDump: implement stopwait
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 02 Dec 2016 12:12:26 +0100
+
+pve-container (1.0-86) unstable; urgency=medium
+
+  * Do not skip unprivileged config parameter when restoring a container
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 02 Dec 2016 07:39:07 +0100
+
+pve-container (1.0-85) unstable; urgency=medium
+
+  * start: don't fail if no lxc cpuset cgroup exists yet
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 25 Nov 2016 11:39:50 +0100
+
+pve-container (1.0-84) unstable; urgency=medium
+
+  * start: use a random cpuset at startup
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Nov 2016 15:51:20 +0100
+
+pve-container (1.0-83) unstable; urgency=medium
+
+  * vm_shutdown: request 'stopped' state for HA enabled CTs
+
+  * switch to 'ha-manager set'
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Nov 2016 08:28:04 +0100
+
+pve-container (1.0-82) unstable; urgency=medium
+
+  * fix spelling: 'mountpoint' 'mount point'
+
+  * fix #1147: allow marking non-volume mps as shared
+
+  * Ubuntu 16.10: fix systemd console files
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 22 Nov 2016 16:50:34 +0100
+
+pve-container (1.0-81) unstable; urgency=medium
+
+  * add support for Ubuntu 16.10
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 02 Nov 2016 08:43:29 +0100
+
+pve-container (1.0-80) unstable; urgency=medium
+
+  * pct: add new command 'pct cpusets' to print assigned cpu sets
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 29 Oct 2016 07:46:40 +0200
+
+pve-container (1.0-79) unstable; urgency=medium
+
+  * PVE::LXC::Config::has_lxc_entry() new helper
+
+  * vmstatus: fix memory usage value including cache sizes
+
+  * fix devices file check in autodev hook
+
+  * add new option 'cores' to restrict visible cores
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 26 Oct 2016 11:46:49 +0200
+
+pve-container (1.0-78) unstable; urgency=medium
+
+  * alpine: fix getty line removal
+
+  * tests: add missing loopback interfaces
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 07 Oct 2016 09:35:34 +0200
+
+pve-container (1.0-77) unstable; urgency=medium
+
+  * fix #1134: debian: don't start empty interface sections
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 04 Oct 2016 11:49:48 +0200
+
+pve-container (1.0-76) unstable; urgency=medium
+
+  * bug #1021: add loopback interface if not network config
+
+  * fix config path in warning about undetectable architecture
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 04 Oct 2016 11:39:42 +0200
+
+pve-container (1.0-75) unstable; urgency=medium
+
+  * restore: fix simple with non-volume mps
+
+  * restore: add permission check, only restore lxc.* if root
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 20 Sep 2016 14:14:06 +0200
+
+pve-container (1.0-74) unstable; urgency=medium
+
+  * correctly set unlimited cpulimit at runtime
+
+  * use integer values for minimum and maximum (json schema cleanup)
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Sep 2016 07:44:29 +0200
+
+pve-container (1.0-73) unstable; urgency=medium
+
+  * fix #1078: accept arch parameter
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 12 Aug 2016 07:26:30 +0200
+
+pve-container (1.0-72) unstable; urgency=medium
+
+  * Fix #1070: vzdump: handle sparse files in suspend mode
+
+  * don't let lxc handle container reboots directly
+
+  * update_lxc_config: sort network devices for consistency
+
+  * update_lxc_config: remove unused parameter
+
+  * ArchLinux: don't use the lxc/ subdir for ttys
+
+  * add status call to pct
+
+  * allow deleting of container hostname
+
+  * pass datacenter.cfg's mac_prefix to random_ether_addr
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 05 Aug 2016 13:14:32 +0200
+
+pve-container (1.0-71) unstable; urgency=medium
+
+  * fix a possible undefined value error
+
+  * provide a better error message for rbd without krbd
+
+  * improve migration output concerning local volumes
+
+  * include custom lxc options when displaying config
+
+  * fix #1046: add non-snapshotted disks as unused
+
+  * added 'pct df'
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 11 Jul 2016 12:35:03 +0200
+
+pve-container (1.0-70) unstable; urgency=medium
+
+  * fix #146: add name to backup log
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 28 Jun 2016 08:26:23 +0200
+
+pve-container (1.0-69) unstable; urgency=medium
+
+  * migration: add checks from QemuMigrate
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Jun 2016 06:38:22 +0200
+
+pve-container (1.0-68) unstable; urgency=medium
+
+  * docs: update mountpoint descriptions
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 07 Jun 2016 11:33:18 +0200
+
+pve-container (1.0-67) unstable; urgency=medium
+
+  * restore: use empty config to reserve container ID
+
+  * split up create_rootfs and restore_and_configure
+
+  * ignore ro flag when creating/restoring CT
+
+  * bindmount: catch rw/ro race and add tests
+
+  * add bindmount regression tests
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 03 Jun 2016 10:33:41 +0200
+
+pve-container (1.0-66) unstable; urgency=medium
+
+  * Setup: add gentoo support
+
+  * Close #999: gentoo: hostname is in /etc/conf.d/hostname
+
+  * Setup/Debian.pm: use BEGIN/END markers for gateway scripts
+
+  * fix deletion of backup snapshots
+
+  * exclude non-volume mps from backup
+
+  * don't allow automatic restore to dev/bind rootfs
+
+  * warn about unsupported backup configuration
+
+  * add ignore_ro flag to mount_all
+
+  * automatically restore mountpoints from backup
+
+  * deal with a check_mount_path race condition
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 25 May 2016 10:18:25 +0200
+
+pve-container (1.0-65) unstable; urgency=medium
+
+  * allow VLAN 1 tag in containers
+
+  * remove backup property from rootfs
+
+  * new helper mountpoint_backup_enabled()
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 May 2016 11:30:16 +0200
+
+pve-container (1.0-64) unstable; urgency=medium
+
+  * setup: add ct_is_executable wrapper
+
+  * setup: check if securetty exists
+
+  * improve error message on container without rootfs
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 14 May 2016 09:06:11 +0200
+
+pve-container (1.0-63) unstable; urgency=medium
+
+  * cleanup gateway hooks in debian network setup
+
+  * fix uninitialized value warning
+
+  * Alpine: generate correct inittab
+
+  * Alpine: fixup securetty
+
+  * fix #971: don't activate shared storage in offline migration
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 May 2016 07:19:19 +0200
+
+pve-container (1.0-62) unstable; urgency=medium
+
+  * centos: fixup ipv6 out-of-subnet route
+
+  * debian: always include the 'dev' portion in explicit routes
+
+  * setup: deal with link-local gateways
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 26 Apr 2016 16:00:06 +0200
+
+pve-container (1.0-61) unstable; urgency=medium
+
+  * add support for ubuntu xenial
+
+  * push/pull permissions: use octal by default
+
+  * fix #942: restore ACL and other rootfs options from backup
+
+  * Debian: correctly setup getty service on systemd based containers
+
+  * honor acl setting with zfs
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 20 Apr 2016 11:25:34 +0200
+
+pve-container (1.0-60) unstable; urgency=medium
+
+  * vm_status: return more verbose HA state
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 Apr 2016 09:04:43 +0200
+
+pve-container (1.0-59) unstable; urgency=medium
+
+  * setup: ability to ignore files
+
+  * Fix #929: delete veths in the post-stop hook
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 13 Apr 2016 10:32:03 +0200
+
+pve-container (1.0-58) unstable; urgency=medium
+
+  * Build-Depend on pve-doc-generator
+
+  * generate manpages with pve-doc-generator
+
+  * debian: support containers upgraded to use systemd
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 Apr 2016 12:36:29 +0200
+
+pve-container (1.0-57) unstable; urgency=medium
+
+  * Add authorized ssh key setup to post_create_hook
+
+  * Add missing '\n' to content in ct_modify_file
+
+  * Add 'perms' option to ct_modify_file
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 05 Apr 2016 15:29:22 +0200
+
+pve-container (1.0-56) unstable; urgency=medium
+
+  * use consistent prefix for worker names
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 04 Apr 2016 16:39:28 +0200
+
+pve-container (1.0-55) unstable; urgency=medium
+
+  * add read_password sub for 'pct create'
+
+  * use asciicode compatible markup
+
+  * enable quotas for passed through /dev devices
+
+  * Fix #925: activate volume before trying to resize
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 01 Apr 2016 07:20:36 +0200
+
+pve-container (1.0-54) unstable; urgency=medium
+
+  * Fix #918: add /dev/mapper symlinks for dm-* devices
+
+  * autodev: create missing paths
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Mar 2016 16:35:01 +0100
+
+pve-container (1.0-53) unstable; urgency=medium
+
+  * Add force parameter for migration with bind/dev mp
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Mar 2016 16:51:40 +0100
+
+pve-container (1.0-52) unstable; urgency=medium
+
+  * Prevent race conditions in snapshot mode backup
+
+  * Use set_lock and remove_lock
+
+  * require -experimental for pct clone and template
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 14 Mar 2016 09:00:04 +0100
+
+pve-container (1.0-51) unstable; urgency=medium
+
+  * fix #912: centos/redhat confusion
+
+  * implement cpulimit hotplugging
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Mar 2016 17:52:33 +0100
+
+pve-container (1.0-50) unstable; urgency=medium
+
+  * follow the change in PVE::AbstractConfig
+
+  * implement rate limiting
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Mar 2016 11:37:09 +0100
+
+pve-container (1.0-49) unstable; urgency=medium
+
+  * change update_etc_hosts to use ct_modify_file
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Mar 2016 09:49:39 +0100
+
+pve-container (1.0-48) unstable; urgency=medium
+
+  * Refactor config-related methods into AbstractConfig
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Mar 2016 10:21:45 +0100
+
+pve-container (1.0-47) unstable; urgency=medium
+
+  * Implement pct mount/unmount (for emergency maintenance)
+
+  * Implement pct push/pull
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 27 Feb 2016 14:38:14 +0100
+
+pve-container (1.0-46) unstable; urgency=medium
+
+  * setup: move setup_container_getty_service to Base
+
+  * suse: move setup_securetty to template_fixup()
+
+  * Add to unused volumes only if really unused
+
+  * exclude 'parent' from config when restoring
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 18 Feb 2016 11:49:15 +0100
+
+pve-container (1.0-45) unstable; urgency=medium
+
+  * add Alpine Linux distribution
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 16 Feb 2016 12:15:11 +0100
+
+pve-container (1.0-44) unstable; urgency=medium
+
+  * snapshot: replace global sync with a namespace sync
+
+  * add support for read-only bind mounts
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Feb 2016 11:57:11 +0100
+
+pve-container (1.0-43) unstable; urgency=medium
+
+  * Improve error handling in snapshot_create
+
+  * VZDump lock update, drop lock_aquire/lock_release
+
+  * prevent snapshot name 'vzdump' from user
+
+  * improve mountpoint parsing
+
+  * added quota flag to mountpoints (disk quota support)
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Feb 2016 06:58:26 +0100
+
+pve-container (1.0-42) unstable; urgency=medium
+
+  * fix growing of a running container's memory limit
+
+  * opensuse 13.2 support
+
+  * added $skiplock parameter for pct start/stop
+
+  * Fix #791: warn when resize2fs fails
+
+  * Fix #881: uninitialized value on valid lxc.cgroup keys
+
+  * Remove mknod call from pre-start hook
+
+  * Only add actual volumes to volid_list
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 08 Feb 2016 12:17:27 +0100
+
+pve-container (1.0-41) unstable; urgency=medium
+
+  * added 'acl' and 'ro' mountpoint options
+
+  * fix PVE::HA use clauses
+
+  * create firewall dir on CT restore
+
+  * Closes #877: Skip mps with backup=0 for snapshot backups
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Jan 2016 16:43:27 +0100
+
+pve-container (1.0-40) unstable; urgency=medium
+
+  * Add dependency to 'file' package
+
+  * Implement linked clones
+
+  * Rework snapshot config removal logic
+
+  * Don't hold flock for whole backup operation
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 23 Jan 2016 08:56:34 +0100
+
+pve-container (1.0-39) unstable; urgency=medium
+
+  * add support for network trunks
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Jan 2016 17:01:38 +0100
+
+pve-container (1.0-38) unstable; urgency=medium
+
+  * Set backup lock during stop and suspend backups
+
+  * Check lock for pct start, stop, suspend, shutdown
+
+  * fix mount_all, improve bind mount handling
+
+  * Add mp to required in pct set mount-point
+
+  * snapshot_create: unfreeze after snapshot creation
+
+  * allow to create containers on lvmthin storage
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 Jan 2016 17:13:31 +0100
+
+pve-container (1.0-37) unstable; urgency=medium
+
+  * check for quorum when starting a container
+
+  * vm_stop: make sure the container is stopped using lxc-wait
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 10 Jan 2016 15:14:22 +0100
+
+pve-container (1.0-36) unstable; urgency=medium
+
+  * vzdump stop mode: wait until container is stopped
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 22 Dec 2015 15:49:20 +0100
+
+pve-container (1.0-35) unstable; urgency=medium
+
+  * Setup: order fqdn before hostname in /etc/hosts
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Dec 2015 09:09:48 +0100
+
+pve-container (1.0-34) unstable; urgency=medium
+
+  * Revert "set memory.kmem.limit_in_bytes"
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Dec 2015 12:28:11 +0100
+
+pve-container (1.0-33) unstable; urgency=medium
+
+  * fix bug #840: vzdump - fix compression command pipe
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 14 Dec 2015 08:48:16 +0100
+
+pve-container (1.0-32) unstable; urgency=medium
+
+  * Revert "Mounting of zfspool snapshots are not necessary."
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Dec 2015 08:10:27 +0100
+
+pve-container (1.0-31) unstable; urgency=medium
+
+  * Revert "use the unmount-namespace stop hook"
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 04 Dec 2015 16:33:09 +0100
+
+pve-container (1.0-30) unstable; urgency=medium
+
+  * OpenSUSE 13.1 support added
+
+  * create: don't skip arch detection on unpack errors
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 02 Dec 2015 11:03:47 +0100
+
+pve-container (1.0-29) unstable; urgency=medium
+
+  * add 'fedora' to ostype schema enum
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 01 Dec 2015 11:24:26 +0100
+
+pve-container (1.0-28) unstable; urgency=medium
+
+  * renamed lxc.start.unshare to lxc.monitor.unshare
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 01 Dec 2015 09:56:33 +0100
+
+pve-container (1.0-27) unstable; urgency=medium
+
+  * fix bug #827: Setup: don't replace fqdn with searchdomain in /etc/hosts
+
+  * add support for Fedora 22
+  
+  * add/restore firewall config with vzdump
+
+  * warn when trying to delete non-existent options
+
+  * create_disks: don't drop extra parameters
+
+  * vzdump: exclude lost+found with unprivilged containers
+
+  * don't restore mountpoint settings
+
+  * vzdump: use --anchored on tar
+
+  * honor backup=yes/no for bind and device mountpoints
+
+  * Redhat: handle /etc/sysconfig/network better
+
+  * Redhat: fix ipv4 dhcp only setup
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 26 Nov 2015 09:59:30 +0100
+
+pve-container (1.0-26) unstable; urgency=medium
+
+  * Mounting of zfspool snapshots are not necessary
+
+  * use the unmount-namespace stop hook
+
+  * vzdump: warn about lack of xattr/acl support on nfs
+
+  * Use new lxc.start.unshare setting
+
+  * set memory.kmem.limit_in_bytes
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Nov 2015 12:43:02 +0100
+
+pve-container (1.0-25) unstable; urgency=medium
+
+  * support unpriviledged containers
+
+  * improve OS type detection
+
+  * remove --totals from COMMON_TAR_FLAGS
+
+  * vzdump: userns support
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 14 Nov 2015 10:29:14 +0100
+
+pve-container (1.0-24) unstable; urgency=medium
+
+  * setup: fix ssh-key perms lost with the rewrite
+
+  * create/restore: add --warning=no-xattr-write to tar
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 06 Nov 2015 16:19:47 +0100
+
+pve-container (1.0-23) unstable; urgency=medium
+
+  * improve setup error message
+
+  * create: safer rewrite_ssh_host_keys
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 06 Nov 2015 11:44:20 +0100
+
+pve-container (1.0-22) unstable; urgency=medium
+
+  * preserve posix capabilities
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 06 Nov 2015 10:56:32 +0100
+
+pve-container (1.0-21) unstable; urgency=medium
+
+  * allow debian stretch/sid containers
+
+  * destroy: check if container is still running
+
+  * LXC::Setup: Load required host files in new()
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 04 Nov 2015 11:23:00 +0100
+
+pve-container (1.0-20) unstable; urgency=medium
+
+  * fix bug #799: resize running CT with no loopdev.
+
+  * Setup: fix bad /dev bindmount
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 02 Nov 2015 11:16:25 +0100
+
+pve-container (1.0-19) unstable; urgency=medium
+
+  * support Ubuntu 15.10
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 31 Oct 2015 18:39:39 +0100
+
+pve-container (1.0-18) unstable; urgency=medium
+
+  * depend on xz-utils
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 30 Oct 2015 06:48:20 +0100
+
+pve-container (1.0-17) unstable; urgency=medium
+
+  * fix bug #770: CPU usage stats for containers
+  
+  * added symlink testcase
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Oct 2015 13:09:29 +0100
+
+pve-container (1.0-16) unstable; urgency=medium
+
+  * fix bug #770: implement Network stats for containers
+
+  * LXC::Setup: chroot into the container (thanks to RACK911Labs.com for
+    the hint)
+
+  * LXC::get_primary_ips: ipv6 can be 'auto'
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Oct 2015 11:43:30 +0100
+
+pve-container (1.0-15) unstable; urgency=medium
+
+  * Start a worker in lxc resize
+
+  * move resize to have it available in the pveshell and at the rest api
+
+  * allow to mount iso images
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 28 Oct 2015 11:27:46 +0100
+
+pve-container (1.0-14) unstable; urgency=medium
+
+  * redhat: fix unused values
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Oct 2015 12:10:56 +0200
+
+pve-container (1.0-13) unstable; urgency=medium
+
+  * restore: make sure only the first pct.conf is extracted
+
+  * redhat: don't use aliases for dual stack networking
+
+  * redhat: use the fully qualified hostname
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 21 Oct 2015 08:31:24 +0200
+
+pve-container (1.0-12) unstable; urgency=medium
+
+  * allow /32 CIDRs and remove duplicated mask array
+
+  * network setup: deal with gateways outside the subnet
+
+  * redhat: use the fully qualified hostname
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 19 Oct 2015 08:52:02 +0200
+
+pve-container (1.0-11) unstable; urgency=medium
+
+  * setup/debian: avoid writing multiple auto lines
+
+  * setup/debian: avoid extra newlines
+
+  * allow /32 CIDRs and remove duplicated mask array
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Oct 2015 09:49:28 +0200
+
+pve-container (1.0-10) unstable; urgency=medium
+
+  * improve regex to match redhat/centos OS version
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Oct 2015 08:27:06 +0200
+
+pve-container (1.0-9) unstable; urgency=medium
+
+  * use new PVE::JSONSchema::parse_siz
+
+  * Add new pct fsck command to check the mountpoints of a container
+
+  * update inittab instead of replacing it
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 15 Oct 2015 10:25:56 +0200
+
+pve-container (1.0-8) unstable; urgency=medium
+
+  * make bridge parameter option - required for hotplug code
+
+  * fix test if storage allows containers
+
+  * fix bug #752: correct size of mount point after resize
+
+  * fix bug #750: deactivate volumes to be sure there are no volumes
+    are active on the source node
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 10 Oct 2015 17:24:31 +0200
+
+pve-container (1.0-7) unstable; urgency=medium
+
+  * Create /fastboot to skip run fsck
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 08 Oct 2015 11:47:47 +0200
+
+pve-container (1.0-6) unstable; urgency=medium
+
+  * cleanup: replace disk-size calculation in pct resize
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 06 Oct 2015 09:37:44 +0200
+
+pve-container (1.0-5) unstable; urgency=medium
+
+  * lxc hooks: use run_cli_handler(), remove stale docs
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 02 Oct 2015 13:47:30 +0200
+
+pve-container (1.0-4) unstable; urgency=medium
+
+  * remove 'noload' option from zfspool mounts
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 01 Oct 2015 16:28:04 +0200
+
+pve-container (1.0-3) unstable; urgency=medium
+
+  * fix hotplug error in update_pct_config
+
+  * added lxc.hook.stop to valid_lxc_conf_keys
+
+  * add mountpoint deletion support and unused volumes
+
+  * set minimum mtu to 64
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 01 Oct 2015 11:42:34 +0200
+
+pve-container (1.0-2) unstable; urgency=medium
+
+  * set TERM=linux for containers
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 30 Sep 2015 09:27:01 +0200
+
+pve-container (1.0-1) unstable; urgency=medium
+
+  * vzdump: mount snapshots with the noload option
+
+  * vzdump:lxc: sync and skip journal in snapshot mode
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 25 Sep 2015 17:55:13 +0200
+
+pve-container (0.9-23) unstable; urgency=medium
+
+  * Use format hashes in json schemas
+
+  * When destroying a container, remove bind mounts and block devices
+    from the list of volumes to delete.
+
+  * improve CT protection mode
+
+  * vzdump: tar: disable warnings about ignored files
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Sep 2015 10:11:31 +0200
+
+pve-container (0.9-22) unstable; urgency=medium
+
+  * allow to parse configuration values with spaces
+
+  * specify data format for hostname, searchdomain and nameserver
+
+  * add check for newlines before writing configuration
+
+  * vzdump fixes
+
+  * mountpoint_mount: disallow symlinks in bind mounts
+
+  * lxc API: use new disk option names in permission check
+  
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Sep 2015 12:14:31 +0200
+
+pve-container (0.9-21) unstable; urgency=medium
+
+  * vzdump: support mountpoints
+
+  * change tar/rsync_vm to use the new exclude pattern method
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Sep 2015 11:38:24 +0200
+
+pve-container (0.9-20) unstable; urgency=medium
+
+  * fix bug #712: fix stop mode backups when container is running
+
+  * add support for LVM
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 14 Sep 2015 09:29:57 +0200
+
+pve-container (0.9-19) unstable; urgency=medium
+
+  * allow older debian versions (>= 4 (etch))
+
+  * fix subvolume mounts (do not use loop device)
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 11 Sep 2015 09:19:03 +0200
+
+pve-container (0.9-18) unstable; urgency=medium
+
+  * fix bug #710: use correct size for OpenVZ restore
+
+  * format_disk: call activate_volume()
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 10 Sep 2015 10:13:29 +0200
+
+pve-container (0.9-17) unstable; urgency=medium
+
+  * mount_all: make sure rootfs exists (fix openvz restore bug)
+
+  * destroy: avoid warning about undefined 'protection' value
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 10 Sep 2015 07:04:24 +0200
+
+pve-container (0.9-16) unstable; urgency=medium
+
+  * fix bug #707: Don't die in vm_shutdown when we have no errors
+
+  * add CT protection mode
+  
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Sep 2015 17:23:04 +0200
+
+pve-container (0.9-15) unstable; urgency=medium
+
+  * add bash completion support
+
+  * support resizing of owned container disks
+
+  * get rid of most of the loop-devices code
+
+  * fix unlock handling after migration
+
+  * add command to unlock a Container if it is locked
+
+  * add support to add mountpoints with pct set
+
+  * added pct exec command
+
+  * add missing archlinux ostype confdesc enum entry
+
+  * destroy owned mountpoints on pct destroy
+
+  * use multiple mount protection (mmp)
+
+  * many bug fixes
+      
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Sep 2015 07:28:41 +0200
+
+pve-container (0.9-14) unstable; urgency=medium
+
+  * vm_create : add support for mountpoints
+  
+  * run spiceterm and return spiceproxy config only if CT is running
+
+  * vzdump: correctly implement snapshot backup
+
+  * vzdump: use correct pid to access container root (fix suspend mode
+  backup)
+
+  * fix bug #691: fix vzdump stop mode backup on zfs
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Aug 2015 11:47:32 +0200
+
+pve-container (0.9-13) unstable; urgency=medium
+
+  * detect ostype when restoring OpenVZ containers
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 25 Aug 2015 12:55:20 +0200
+
+pve-container (0.9-12) unstable; urgency=medium
+
+  * code cleanups
+
+  * implement pct listsnapshot cli command
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Aug 2015 06:32:05 +0200
+
+pve-container (0.9-11) unstable; urgency=medium
+
+  * add mpX mountpoint configuration (experimental)
+  
+  * remove <vmid>.fw file after lxc vm destroy
+
+  * cleanup directory structure
+
+  * add file access methods to LXCSetup::Base
+
+  * mountpoint: add support for host /dev/xxx block device passthrough
+
+  * Added PVE::LXCSetup::Base::setup_securetty
+
+  * archlinux template support
+
+  * implement new cmode option
+
+  * implement template creation
+
+  * add rbd storage type support
+
+  * do not use hardcoded disk image names
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 19 Aug 2015 15:51:13 +0200
+
+pve-container (0.9-10) unstable; urgency=medium
+
+  * add support for RHEL/CentOS
+  
+  * allow to set empty lxc.xxx values
+  
+  * added pve-update-lxc-config postinstall hook
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 11 Aug 2015 10:23:33 +0200
+
+pve-container (0.9-9) unstable; urgency=medium
+
+  * Fix: If a Ct are created and a pool are given add the Ct to pool
+
+  * don't set proxy_arp and forwarding on lxc veths
+
+  * activate/deactivates volumes on container start/stop
+
+  * allow to use drbd storage for containers
+
+  * add manual page for container configuration format ("man pct.conf")
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 07 Aug 2015 12:11:22 +0200
+
+pve-container (0.9-8) unstable; urgency=medium
+
+  * use our own configuration format for containers
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 06 Aug 2015 11:28:27 +0200
+
+pve-container (0.9-7) unstable; urgency=medium
+
+  * fixes for container restore
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 31 Jul 2015 12:20:13 +0200
+
+pve-container (0.9-6) unstable; urgency=medium
+
+  * fix memory and swap size calculations
+
+  * ipv6 slaac/autoconf support
+
+  * fix ipv4 replacement of running containers
+
+  * allow to restore backups of openvz containers
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 31 Jul 2015 11:09:44 +0200
+
+pve-container (0.9-5) unstable; urgency=medium
+
+  * correctly detect container architecture
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 27 Jul 2015 09:38:45 +0200
+
+pve-container (0.9-4) unstable; urgency=medium
+
+  * allow configuring lxc.seccomp
+
+  * network setup: allow dhcp, manual and unmanaged network
+
+  * implement snapshot API
+
+  * implement snapshots for zfs
+  
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 24 Jul 2015 13:12:16 +0200
+
+pve-container (0.9-3) unstable; urgency=medium
+
+  * fix tty setup for debian6
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 03 Jul 2015 06:41:08 +0200
+
+pve-container (0.9-2) unstable; urgency=medium
+
+  * correctly set password change time
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 01 Jul 2015 11:03:37 +0200
+
+pve-container (0.9-1) unstable; urgency=medium
+
+  * correctly untaint crontab filenames
+
+  * create new ssh host keys at startup
+
+  * add net hotplug and hotplug ip configuration
+
+  * add support for Ubuntu 15.04
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 29 Jun 2015 12:38:46 +0200
+
+pve-container (0.8-1) unstable; urgency=medium
+
+  * only use lxc-pve-mount-hook for containers on /etc/pve/
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 24 Jun 2015 06:41:37 +0200
+
+pve-container (0.7-2) unstable; urgency=medium
+
+  * use nowait trigger for pve-api-updates
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 01 Jun 2015 12:30:08 +0200
+
+pve-container (0.7-1) unstable; urgency=medium
+
+  * randomize crontab entries
+
+  * install global lxc config
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 07 May 2015 09:09:15 +0200
+
+pve-container (0.6-2) unstable; urgency=medium
+
+  * depend on lxc-pve
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 May 2015 10:37:18 +0200
+
+pve-container (0.6-1) unstable; urgency=medium
+
+  * add support for centos6
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 May 2015 10:20:46 +0200
+
+pve-container (0.5-1) unstable; urgency=medium
+
+  * implement restore command
+
+  * implement disk size parameter (loop mounts)
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 30 Apr 2015 18:46:23 +0200
+
+pve-container (0.4-1) unstable; urgency=medium
+
+  * allow to setup root password
+
+  * implement dns setup for containers
+
+  * implement startup and onboot option
+
+  * implement cpuunits
+
+  * add firewall and vlan tag network options
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 Apr 2015 10:58:45 +0200
+
+pve-container (0.3-1) unstable; urgency=medium
+
+  * implement lxcnetaddbr to bring up network
+
+  * implement swap and cpulimit
+
+  * add regression tests
+
+  * add mount hook to setup container config
+
+  * add helper classes to setup container configuration
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Apr 2015 07:50:02 +0200
+
+pve-container (0.2-1) unstable; urgency=medium
+
+  * improved CLI
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 18 Apr 2015 10:38:52 +0200
+
+pve-container (0.1-1) unstable; urgency=medium
+
+  * first try
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Apr 2015 06:50:08 +0200
+

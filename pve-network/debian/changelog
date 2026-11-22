@@ -1,0 +1,1069 @@
+libpve-network-perl (1.6.12) trixie; urgency=medium
+
+  * api: fabrics: list the node of each fabric a host is part of, and check
+    the node permissions with the node name. Before, users with privileges
+    only on single nodes did not see any fabric node in the index of all
+    fabrics.
+
+  * sdn: fabrics: only warn about a VRF that the network configuration of the
+    host sets for a fabric interface. Before, it made generating the SDN
+    network configuration of the node fail, so zones and other fabrics were
+    not updated either.
+
+  * sdn: zones: warn about host interfaces that use the VRF of a zone that
+    no longer exists on the node, for example after deleting the zone or
+    disabling its dedicated VRF.
+
+  * api: fabrics: reject WireGuard interfaces for OSPF and BGP fabrics in a
+    zone, as the WireGuard fabric keeps their addresses and routes in the
+    default routing table. Only changes to nodes are checked, so an existing
+    configuration with such an interface still loads and can be fixed.
+
+  * api: fabrics: describe the pending changes in the schemas of the fabric
+    and node lists, and return the digest in the fabric index.
+
+  * api: fabric status: list the interfaces in the index and document the
+    values that the WireGuard status omits.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 21 Nov 2026 18:52:33 +0100
+
+libpve-network-perl (1.6.11) trixie; urgency=medium
+
+  * api: ipams, dns: only include credentials, such as the phpIPAM and NetBox
+    tokens or the PowerDNS API key, in the index for users with SDN.Allocate.
+    Previously, users with SDN.Audit, as granted by the PVEAuditor role, could
+    read them.
+
+  * subnets: store DHCP ranges in canonical form and check their addresses
+    when saving. Ranges with empty parts or addresses with leading zeros were
+    accepted, but rejected when the firewall read the running configuration,
+    which made it drop the SDN IP sets. Existing ranges are not rewritten,
+    correct or remove such a range and apply the SDN configuration.
+
+  * simple zones: add an optional dedicated VRF, which separates the routing
+    of the zone from the host and from other zones, for example to use
+    overlapping subnets in different zones. Unreachable default routes keep
+    lookups from falling through to the main routing table. For such zones:
+    - DHCP: run dnsmasq in the zone VRF.
+    - SNAT: masquerade via the host interfaces in the zone VRF.
+    - conntrack: assign each zone a conntrack zone, so that connections in
+      different VRFs do not share conntrack entries.
+    - static routes: support them in the zone VRF, managed by FRR. Changing
+      them requires Sys.Modify on the nodes of the zone.
+    - EVPN exit nodes no longer add null routes for subnets of these zones.
+
+  * fabrics: allow OSPF and BGP fabrics to use the VRF of a simple zone.
+    Underlay fabrics of EVPN controllers and VXLAN zones must stay in the
+    default VRF. Generating the network configuration fails if a fabric
+    interface also has a VRF set in /etc/network/interfaces.
+
+  * fabrics: wireguard: add an MTU option for interfaces, with a minimum of
+    1280. Interfaces without an MTU keep the default of 1500 that ifupdown2
+    sets, not the 1420 of WireGuard.
+
+  * fabrics: describe the WireGuard status properties in the API schema.
+
+  * dhcp: only configure DHCP for zones on the local node, so that nodes
+    outside of zones with DHCP no longer need dnsmasq installed.
+
+  * dhcp: fix the DNS server option for IPv4 subnets without a gateway, which
+    produced an invalid line in the dnsmasq configuration.
+
+  * evpn: also add the IPv6 unreachable default route to zone VRFs, so that
+    IPv6 lookups no longer fall through to the main routing table on non-exit
+    nodes.
+
+  * fix #7294: vnets: update the members of resource pools when a VNet moves
+    to another zone, and remove deleted VNets from them, so that a stale entry
+    cannot grant access to a later VNet with the same zone and name.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Nov 2026 05:45:49 +0100
+
+libpve-network-perl (1.6.10) trixie; urgency=medium
+
+  * sdn: ipam, dns: mark API tokens as sensitive to redact them automatically
+    in the system report for easier and safer handling of them.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Nov 2026 02:20:37 +0100
+
+libpve-network-perl (1.6.9) trixie; urgency=medium
+
+  * api: only look up applied VNets for the VNet firewall and the MAC-VRF
+    node endpoint, also before the SDN configuration was applied for the
+    first time. Previously, VNets that were not applied yet could be found
+    until the first apply.
+
+  * vnets: reject backslashes and whitespace other than spaces in the alias.
+    The alias is written to the generated interface configuration and set as
+    kernel interface alias, where such characters could break parsing, for
+    example in proxmox-firewall.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 13 Nov 2026 00:26:13 +0100
+
+libpve-network-perl (1.6.8) trixie; urgency=medium
+
+  * fix #7738: zones: determine the physical ports of bridges once per run,
+    instead of querying them again for every VNet of VLAN and QinQ zones.
+
+  * ipam: pve: fix looking up the addresses of a MAC in dual-stack zones,
+    where the IPv4 address could randomly be missing depending on the order
+    of the subnets.
+
+  * zones: vxlan:
+    - limit the UDP port to 65535, as larger values made ifupdown2 fail to
+      create the VXLAN interface.
+    - set the local tunnel address of VXLAN interfaces explicitly. Otherwise,
+      ifupdown2 used the address of another zone, for example of an EVPN zone
+      on a separate underlay, which moved the zone's traffic onto that
+      underlay.
+
+  * zones: vxlan, evpn: keep generating the configuration of a VNet if the
+    route lookup for one of its peers fails, and log a warning instead.
+    Previously, the generation was aborted and applying the configuration
+    removed the existing bridge and VXLAN interface of the VNet.
+
+  * fix #7520: remove the ACLs of deleted zones, VNets, controllers, fabrics,
+    route maps and prefix lists when applying the configuration, and move the
+    ACLs of a VNet along when it was moved to another zone. If the VNet
+    already has ACLs in its new zone, applying fails until those are removed.
+
+  * api: fix several permission checks and information leaks:
+    - ipam: check the permissions for changing IP mappings against the zone
+      of the VNet, instead of the user-supplied zone parameter, which allowed
+      changing IPAM entries of inaccessible VNets. The zone parameter is now
+      ignored and deprecated.
+    - subnets: check that a subnet belongs to the VNet given in the API path,
+      which allowed changing or deleting subnets of inaccessible VNets.
+    - vnets: require permissions on the target zone when moving a VNet into
+      another zone.
+    - check the permissions against the running or pending configuration
+      when showing those, instead of always against the current one, and
+      show pending changes that move an entity out of reach as deletion.
+    - return the same error for inaccessible and non-existing zones, VNets
+      and subnets, so that their existence is not revealed.
+    - require the SDN.Use or SDN.Allocate privilege on DNS and IPAM plugins,
+      controllers, fabrics, route maps and prefix lists for referencing them
+      in zones, controllers, fabrics and route maps. Users who manage zones
+      may need this privilege added, for example on '/sdn/ipams/pve' for the
+      default IPAM.
+
+  * validate configuration values more strictly, so they can no longer break
+    or inject statements into the generated network and FRR configuration:
+    - reject values with a trailing newline, which the validation patterns
+      accepted.
+    - controllers: bgp: require a valid interface name for the loopback.
+    - controllers: is-is: restrict the domain to letters, digits, '.', '-'
+      and '_'. Existing domains with other characters have to be renamed.
+    - controllers: limit the eBGP multihop value to 1-255.
+    - evpn: reject route targets with both the ASN and the number above
+      65535, as they do not fit into a BGP extended community.
+    - route maps, powerdns, phpipam: reject whitespace in match and set
+      values, URLs, keys and tokens.
+    - fabrics: validate WireGuard keys, OSPF areas, the interface and node
+      names of peers, and endpoints.
+    - zones: qinq: limit the service VLAN tag and the MTU to valid ranges.
+    - zones: vlan: require a valid interface name for the bridge.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 02 Nov 2026 23:44:24 +0100
+
+libpve-network-perl (1.6.7) trixie; urgency=medium
+
+  * api: fix querying the EVPN IP-VRF and MAC-VRF status of zones that have
+    nodes configured explicitly, which failed with a "Not an ARRAY reference"
+    error and left the respective panels empty.
+
+  * simple & evpn zones: do not abort the whole setup if determining the
+    outgoing interface for an IPv6 SNAT subnet fails, for example on hosts
+    without IPv6 connectivity. Previously the bridges of the current and all
+    following VNets were not created, making VMs on them fail to start with
+    "bridge does not exist".
+
+  * api: vnets: check that the referenced zone exists on create and update,
+    instead of failing later with a confusing "cannot lookup undefined type!"
+    error.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Jul 2026 13:14:41 +0200
+
+libpve-network-perl (1.6.6) trixie; urgency=medium
+
+  * fabrics: make ip_prefix and ip6_prefix deletable. This allows users to
+    update (and remove) the prefixes of fabrics which don't have any nodes
+    configured. There still has to be at least one IPv6 or IPv4 prefix on the
+    fabric.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 21 May 2026 14:04:39 +0200
+
+libpve-network-perl (1.6.5) trixie; urgency=medium
+
+  * sdn: fabrics: wireguard: re-migrate internal-node endpoints back to a
+    port-less form on read, matching the reverted endpoint schema in
+    proxmox-ve-config.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 21 May 2026 13:30:00 +0200
+
+libpve-network-perl (1.6.4) trixie; urgency=medium
+
+  * fabrics: add ospf `network_type` property to interface, which lets users
+    choose all the possible network types frr supports on an ospf interface.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 20 May 2026 11:10:31 +0200
+
+libpve-network-perl (1.6.3) trixie; urgency=medium
+
+  * sdn: fabrics: wireguard: migrate legacy port-less endpoints stored by
+    libpve-network-perl 1.5.0 to the new host:port format on read, so existing
+    fabrics keep working after the endpoint format change.
+
+  * sdn: zones: evpn: add a description to the secondary-controllers schema
+    array items so consumers that walk the schema can document the per-entry
+    type.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 20 May 2026 04:21:17 +0200
+
+libpve-network-perl (1.6.2) trixie; urgency=medium
+
+  * frr: add bgpd to SDN-managed daemons to ensure applying SDN changes with a
+    node that has a BGP fabric configured doesn't trips a perl-side guard even
+    though the rust implementation can handle this.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 May 2026 18:42:08 +0200
+
+libpve-network-perl (1.6.1) trixie; urgency=medium
+
+  * fabrics: wireguard: defer private key cleanup to SDN apply so the
+    rollback API endpoint can restore a deleted node or interface without
+    losing its matching private key.
+
+  * route maps: add `tag` to the allowed match-key list so users can match
+    on the route tag attribute through the API and UI.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 May 2026 19:30:00 +0200
+
+libpve-network-perl (1.6.0) trixie; urgency=medium
+
+  * fabrics: add BGP as a third fabric protocol, supporting eBGP unnumbered
+    underlays where each node carries a unique ASN and peers with its
+    neighbors over physical interfaces without IP assignment on the fabric
+    links. Coexists with the EVPN controller's BGP instance in the default VRF
+    via local-as. Combining a BGP controller with a BGP fabric on the same
+    node is rejected since both target the same FRR BGP instance.
+
+  * evpn: support eBGP VTEPs over BGP fabric underlays. When the EVPN underlay
+    is a BGP fabric and the controller uses bgp-mode=external, each VTEP
+    advertises under its own per-node ASN, while the EVPN controller's ASN is
+    still used for autoderived route-target values to keep RTs consistent
+    across the fabric.
+
+  * evpn: support IPv6-only underlays. Sort the generated peer-IP list so
+    config output stays deterministic across reruns, and derive a valid
+    router-id even when the loopback only carries an IPv6 address.
+
+  * fabrics: ospf: add the `redistribute` property to the schema for the new
+    OSPF route-redistribution feature.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 May 2026 11:07:12 +0200
+
+libpve-network-perl (1.5.1) trixie; urgency=medium
+
+  * evpn controller: support multiple EVPN controllers per cluster, with
+    per-controller node restriction, BGP session mode and eBGP-multihop
+    settings. A new 'peer-group-name' (default 'VTEP') keeps existing
+    single-controller configurations compatible, and the new 'bgp-mode'
+    (default 'auto') keeps the previous behavior of inheriting the BGP session
+    type from the BGP controller.
+
+  * evpn zone: allow a zone to be advertised through multiple EVPN controllers
+    via a new 'secondary-controllers' list. The existing 'controller' field
+    still acts as the primary and drives VTEP IP and MTU auto-derivation.
+
+  * evpn: filter outgoing EVPN routes by zone and VNet route-target when more
+    than one EVPN controller is configured, so each controller only announces
+    routes for the zones it serves. Single-controller setups stay unfiltered
+    for backwards compatibility, and a zone's 'rt-import' setting overrides
+        the default filter.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 May 2026 12:22:20 +0200
+
+libpve-network-perl (1.5.0) trixie; urgency=medium
+
+  * fabrics: add WireGuard as a new fabric protocol. Internal nodes (cluster
+    members) carry the WireGuard interfaces to create and the peer references
+    for them, external nodes act as reusable peer definitions for arbitrary
+    inter-cluster peers. Keys are auto-generated per (node, interface) tuple
+    in cluster-replicated /etc/pve/priv/wg-keys.cfg and synchronously purged
+    on interface or node delete. Rejects mismatched role on update, validates
+    uniqueness of interface names and listen ports per fabric, and gates
+    deletion of interfaces still referenced by other nodes' peers.
+
+  * fabrics: wireguard: accept the full /0 IPv4 and /0 IPv6 prefix range in
+    node allowed_ips, so users can route everything through a fabric interface
+    without working around the schema.
+
+  * prefix-list: allow the full CIDR range in prefix list entries via new
+    pve-sdn-ipv4-cidr-fullrange and pve-sdn-ipv6-cidr-fullrange schema formats
+    that accept /0 and (on IPv6) /128. The schema previously rejected those
+    edges that FRR itself accepts.
+
+  * zones: pick a local underlay IP for IPv6 peer addresses too, matching the
+    IPv4 behaviour. Previously VXLAN peer lists with IPv6 endpoints fell back
+    to an empty local-underlay choice.
+
+  * api: route maps: make the value property optional on the exit-action
+    sub-key, since `continue` takes no value and `on-match-goto` takes a
+    sequence number that the section-config layer still enforces.
+
+  * d/control: recommend wireguard-tools so wg(8) is pulled in by default for
+    providing new WireGuard fabric support.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 May 2026 06:25:06 +0200
+
+libpve-network-perl (1.4.2) trixie; urgency=medium
+
+  * api: route maps: add the missing format_description on the value property
+    of the match and set sub-keys and switch the exit-action 'on-match-goto'
+    and 'continue' values over to the dedicated route-map order type, fixing
+    the JSON schema's upper bound to match what FRR accepts (u16) and what the
+    section config type already enforced.
+
+  * include fabrics when checking for pending changes, so locking the SDN
+    config is rejected when a fabric has pending changes (it accepted such a
+    lock before).
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 13 May 2026 05:13:01 +0200
+
+libpve-network-perl (1.4.1) trixie; urgency=medium
+
+  * api: refactor route map endpoints. The /route-maps endpoint now returns
+    only the IDs (used by the new selector component), entry CRUD lives
+    under /route-maps/entries/{route-map-id}/entry/{order}.
+
+  * api: refactor prefix list endpoints. Introduces dedicated CRUD endpoints
+    for prefix list entries under /prefix-lists/{id}/entries and adds a
+    verbose query parameter on the prefix-list listing.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 12 May 2026 02:12:52 +0200
+
+libpve-network-perl (1.4.0) trixie; urgency=medium
+
+  * introduce prefix lists and route maps as configurable entities, exposed
+    under the new /cluster/sdn/prefix-lists and /cluster/sdn/route-maps API
+    endpoints. Both can be referenced from controllers and fabrics to filter
+    and shape route advertisements.
+
+  * bgp and evpn controllers: add 'route-map-in' and 'route-map-out'
+    parameters to attach user-defined route maps to incoming and outgoing
+    routes, for example to selectively export routes via BGP or restrict EVPN
+    advertisements by route target.
+
+  * fabrics: ospf and openfabric: add 'route_filter' parameter to override the
+    default prefix filter that controls which fabric routes are installed into
+    the kernel routing table.
+
+  * include route map and prefix list changes in the FRR dry-run output so
+    they show up before applying.
+
+  * adapt bgp and evpn controllers to the new match/set FRR config structure
+    exposed by proxmox-frr.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 May 2026 03:14:34 +0200
+
+libpve-network-perl (1.3.0) trixie; urgency=medium
+
+  * generate structured FRR config that is rendered using Rust types and jinja
+    templates instead of building the config line by line, allowing for more
+    flexibility while keeping maintenance and complexity costs lower.
+
+  * rework frr.conf.local merging to work with the new template-based types.
+
+  * api: add dry-run endpoint for SDN apply to preview FRR and interface
+    config changes before applying.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 28 Mar 2026 17:58:58 +0100
+
+libpve-network-perl (1.2.5) trixie; urgency=medium
+
+  * sdn: ipams: php plugin: add newline after error message to avoid including
+    the code context.
+
+  * fix #5949: avoid dnsmasq segfault when subnet has no gateway.
+
+  * sdn: add missing new-line at the end of frr config and update tests.
+
+  * sdn: evpn: fix IPv6 exit-node local routing.
+
+  * sdn: bgp: fix invalid double slash in ipv6 network.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Jan 2026 18:41:16 +0100
+
+libpve-network-perl (1.2.4) trixie; urgency=medium
+
+  * fix #6806: vlan: qinq: fix bridge port detection.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 10 Dec 2025 20:47:02 +0100
+
+libpve-network-perl (1.2.3) trixie; urgency=medium
+
+  * api: sdn: fix null vmid for tap/veth ports on bridges api call.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 18 Nov 2025 15:17:35 +0100
+
+libpve-network-perl (1.2.2) trixie; urgency=medium
+
+  * sdn: include existence of the local frr.conf.local file to decide when we
+    have to write out the frr config. This way it's possible to have a custom
+    config in the frr.conf.local file without any SDN objects configured and
+    still be able to apply the config.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 18 Nov 2025 13:14:05 +0100
+
+libpve-network-perl (1.2.1) trixie; urgency=medium
+
+  * api: zone vNet list: return full device name of firewall bridge ports, not
+    just the numeric index. E.g., instead of returning "0" before one now gets
+    "net0" returned, allowing easier association with the guest config.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 17 Nov 2025 15:23:08 +0100
+
+libpve-network-perl (1.2.0) trixie; urgency=medium
+
+  * api: nodes:
+    - vnets: add mac-vrf endpoint for evpn vnets
+    - zones: add ip vrf endpoint for evpn zones
+    - zones: add bridge status
+    - fabrics: add endpoint for querying interface status
+    - fabrics: add endpoint for querying neighbor information
+    - fabrics: add endpoint for querying route status
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Nov 2025 01:45:41 +0100
+
+libpve-network-perl (1.1.8) trixie; urgency=medium
+
+  * frr: make warning when frr reload fails show up in the task log.
+
+  * fix #6806: sdn: allow nic* and if* interfaces as bridge ports.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 16 Sep 2025 13:13:42 +0200
+
+libpve-network-perl (1.1.7) trixie; urgency=medium
+
+  * fix maximum value for ASN
+
+  * api: add state standard option
+
+  * sdn api: properly return null for rollback and lock endpoints
+
+  * api: update schema for various endpoints
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 04 Sep 2025 14:22:03 +0200
+
+libpve-network-perl (1.1.6) trixie; urgency=medium
+
+  * sdn api: always send regenerate-frr parameter explicitly when triggering
+    network reload on all nodes.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 05 Aug 2025 12:11:57 +0200
+
+libpve-network-perl (1.1.5) trixie; urgency=medium
+
+  * api: config reload: rename parameter from skip-frr to regenerate-frr
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 04 Aug 2025 18:03:42 +0200
+
+libpve-network-perl (1.1.4) trixie; urgency=medium
+
+  * api: ipam status: ensure that guest ID is returned as an integer.
+
+  * ipam: remove fallback code for legacy ipam.db and mac cache.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 01 Aug 2025 15:16:16 +0200
+
+libpve-network-perl (1.1.3) trixie; urgency=medium
+
+  * sdn: add global domain lock for configuration.
+
+  * api: add lock-token parameter to all api calls. It can be optionally
+    passed to ensure no other entity modified the SDN state through the API
+    during some operations that might need to be split over multiple API
+    calls, adding multiple pending changes before they get committed once when
+    all is prepared for the respective action.
+
+  * api: add lock and release endpoints for global configuration lock.
+
+  * api: add rollback endpoint for undoing any pending change.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Jul 2025 14:15:18 +0200
+
+libpve-network-perl (1.1.2) trixie; urgency=medium
+
+  * d/control: make ifupdown2 hard dependency, bump FRR to being recommended
+    for better out-of-the-box experience with SDN.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Jul 2025 19:00:55 +0200
+
+libpve-network-perl (1.1.1) trixie; urgency=medium
+
+  * frr: early exit on apply when frr is not installed
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Jul 2025 18:47:16 +0200
+
+libpve-network-perl (1.1.0) trixie; urgency=medium
+
+  * dhcp: fix internal issues with perl module usage depending on specific
+    ordering of the use statements, or otherwise fail to create the DHCP
+    section config.
+
+  * Add SDN fabrics implementation. Fabrics allow the user to easily use
+    dynamic routing protocols such as OpenFabric and OSPF in their clusters.
+    It also opens up the way for integrating existing features, such as Ceph
+    with the new SDN fabrics feature to enable users simple configuration of
+    e.g. full-mesh Ceph clusters via the Web UI.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Jul 2025 00:36:12 +0200
+
+libpve-network-perl (1.0.1) trixie; urgency=medium
+
+  * dhcp: avoid declaring variables in conditional statement.
+
+  * evpn: avoid declaring variables in conditionale statement.
+
+  * tree-wide: avoid "return" statement followed by "sort".
+
+  * dhcp: drop unused and bogus imports to avoid some warnings.
+
+  * dhcp: dnsmasq: warn if line cannot be parsed from ethers file
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Jun 2025 14:50:30 +0200
+
+libpve-network-perl (1.0.0) trixie; urgency=medium
+
+  * re-build for Debian 13 Trixie based Proxmox VE 9 releases.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Jun 2025 22:33:03 +0200
+
+libpve-network-perl (0.11.2) bookworm; urgency=medium
+
+  * frr: remove filtering outfunc of frr-reload command, new FRR 10.2 behavior
+    causes issues with that.
+
+  * frr: actively enable frr systemd service unit if not enabled and start frr
+    on reloading the controller config
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Apr 2025 08:16:38 +0200
+
+libpve-network-perl (0.11.1) bookworm; urgency=medium
+
+  * ipam: netbox: fix adding VMs without a name set in the options
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Apr 2025 15:35:08 +0200
+
+libpve-network-perl (0.11.0) bookworm; urgency=medium
+
+  * dns: powerdns: correctly handle different records types (A / AAAA)
+
+  * ipam: netbox: implement deleting subnets and improve error handling.
+
+  * fix #5496: fix handling DHCP ranges and allocation for Netbox IPAM
+    plugin.
+
+  * vnet: do not skip if no range is defined, ask for allocation inside prefix
+    instead.
+
+  * correctly register reservation details when allocating the next free IP.
+
+  * subnet: dhcp: do not allow overlapping DHCP ranges.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Apr 2025 13:52:02 +0200
+
+libpve-network-perl (0.10.1) bookworm; urgency=medium
+
+  * sdn: fix comparison of pending configuration values
+
+  * api request helper: enforce TLS cert-check and add cert-fingerprint option
+
+  * ipam: add fingerprint to available properties for IPAM base and DNS base
+    plugin and expose it in the respective integrations for phpIPAM, NetBox
+    abd PowerDNS.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 06 Mar 2025 10:21:35 +0100
+
+libpve-network-perl (0.10.0) bookworm; urgency=medium
+
+  * d/postinst: do not break, if moving either ipam state or cache file fails
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 20 Nov 2024 16:14:39 +0100
+
+libpve-network-perl (0.9.9) bookworm; urgency=medium
+
+  * split package into implementation and API endpoints
+
+  * fix #5324: non-vlan-aware zone: set MTU for veth links if it's configured
+    for the zone
+
+  * ipam: move state file of PVE plugin over to common sdn directory
+
+  * vnets: add ports isolation, allowing one to drop traffic between all ports
+    that have isolation enabled on the local bridge, while still allowing
+    traffic with non-isolated ports. Basically one can relatively simply
+    disable traffic between guests but still allow traffic from outside.
+
+  * api: add endpoints for vnet-level firewall
+
+  * debian: migrate legacy mac/ipam cache/state files on upgrade
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 Nov 2024 16:27:15 +0100
+
+libpve-network-perl (0.9.8) bookworm; urgency=medium
+
+  * zones: add method for getting MTU
+
+  * dhcp: dnsmasq: send mtu option via dhcp
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 23 Apr 2024 19:37:50 +0200
+
+libpve-network-perl (0.9.7) bookworm; urgency=medium
+
+  * various DHCP related fixes:
+    - get next free ip for a specific IP version
+    - request both IPv4 and IPv6 addresses on VM start
+    - only consider subnets that have dhcp-range configured
+    - rollback allocated ips on failure
+
+  * api: fix missing types for 'pending' fields
+
+  * fix #5319: frr.local: add support for bgp-community
+
+  * fix #5344: isis: add isis networkid parser
+
+  * fix #5361: evpn: fix ipv6 route-map
+
+  * fix #5364: bgp|evpn: derivated router-id from mac address for ipv6 underlay
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Apr 2024 13:59:25 +0200
+
+libpve-network-perl (0.9.6) bookworm; urgency=medium
+
+  * controllers: evpn: add ipv6 prefix-list support
+
+  * controllers: evpn: use prefix-list in route-map instead evpn match to cope
+    with FRR regression
+
+  * controllers: evpn: fix order of routes for null and ipv6 ones
+
+  * prefer proxy from datacenter.cfg for external api calls
+
+  * ipam: improve phpIPAM support a bit
+
+  * fix #5275: remove priority field from powerdns
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 22 Mar 2024 10:15:29 +0100
+
+libpve-network-perl (0.9.5) bookworm; urgency=medium
+
+  * validation: add support for arrays to change tracking
+
+  * api: vnet: fix warning in vnet API if the original change is still pending
+
+  * dhcp: dnsmasq: untaint when deleting configuration files
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 29 Nov 2023 15:19:08 +0100
+
+libpve-network-perl (0.9.4) bookworm; urgency=medium
+
+  * dhcp dnsmasq: guard die with any zone having enabled dhcp
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 Nov 2023 12:12:03 +0100
+
+libpve-network-perl (0.9.2) bookworm; urgency=medium
+
+  * dnsmasq: drop no-resolve for default config
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 Nov 2023 11:32:11 +0100
+
+libpve-network-perl (0.9.1) bookworm; urgency=medium
+
+  * sdn: allow deletion of empty subnet with gateway
+
+  * fix #4917: evpn: forbid vlan-aware bridge
+
+  * dnsmasq: check for existence of dnsmasq binary
+
+  * controller: evpn reload: cause a task-warning if frr is not installed
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Nov 2023 19:50:46 +0100
+
+libpve-network-perl (0.9.0) bookworm; urgency=medium
+
+  * dnsmasq: fix config directory permission
+
+  * api: take partial configs for update (PUT) requests
+
+  * api: handle delete parameter when updating ipams, dns entries, controllers
+
+  * fix dhcpv6 router advertisement
+
+  * subnets: only delete macs.db entries if mac is available
+
+  * ipam: improve update / delete behavior
+
+  * sdn: validate dhcp-range in API
+
+  * install dnsmasq@.service snippet to start after networking.service in
+    order to make sure ifupdown has created all the interfaces before dnsmasq
+    tries to find them and to fix suggesting that its a provider for network
+    target
+
+  * dnsmasq: use quite-ra to avoid log spam
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Nov 2023 14:46:31 +0100
+
+libpve-network-perl (0.8.5) bookworm; urgency=medium
+
+  * sdn: register MAC in IPAM if not found
+
+  * subnet: fix dhcp-dns-server format
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Nov 2023 20:34:42 +0100
+
+libpve-network-perl (0.8.4) bookworm; urgency=medium
+
+  * improve ip allocation in dhcp ranges
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Nov 2023 14:49:21 +0100
+
+libpve-network-perl (0.8.3) bookworm; urgency=medium
+
+  * add DHCP plugin base with initial 'dnsmasq' plugin
+
+  * ipam: manage ip/mac associations
+
+  * zones: add option to choose a dhcp server
+
+  * subnets: add dhcp options
+
+  * api: refactor URL structure for ipam
+    * move listing to /ipams/pve/status
+    * move create/update/delete to /vnets/{vnetid}/ips
+
+  * downgrade frr from recommended to suggested
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Nov 2023 14:41:43 +0100
+
+libpve-network-perl (0.8.2) bookworm; urgency=medium
+
+  * fix permissions && use new /sdn/zones/<zone>/<vnet> path
+
+  * zones: fix status
+
+  * sdn: config generation: check if interfaces.d/sdn is sourced
+
+  * zones: improve error message
+
+  * zones: add add|del_bridge_fdb to plugins
+
+  * zones: evpn: add disable-bridge-learning
+
+  * controller: evpn: fix find_bgp_controller
+
+  * controller: frr: add parsing of "interfaces" section
+
+  * controller: add isis router plugin
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 25 Oct 2023 13:05:49 +0200
+
+libpve-network-perl (0.8.1) bookworm; urgency=medium
+
+  * fix #4657: evpn: fix exit-node with multiple vrf
+
+  * fix #4425: vxlan, evpn: add vxlan-port option to override default
+
+  * fix #4662: frr: fix config generation ordering
+
+  * fix #4389: evpn: exit nodes: null routes subnets from other zones
+
+  * fix #4683: zones: QinQ: fix vlan-protocol when bridge is VLAN aware
+
+  * network reload: fix UPID parsing for the case where a task produced
+    warnings or errors
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 06 Jun 2023 08:07:19 +0200
+
+libpve-network-perl (0.8.0) bookworm; urgency=medium
+
+  * re-build for Proxmox VE 8 / Debian 12 Bookworm
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 25 May 2023 18:18:20 +0200
+
+libpve-network-perl (0.7.3) bullseye; urgency=medium
+
+  * controllers: evpn: correctly limit the number of controllers to maximal
+    one
+
+  * frr: add support for prefix-list in config
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Mar 2023 17:19:14 +0100
+
+libpve-network-perl (0.7.2) bullseye; urgency=medium
+
+  * frr: update config frrversion to 8.2.2
+
+  * frr: add a local config parser and if configured merge with
+    generated config
+
+  * frr: config : add exit on router && routemaps to future proof
+    against upcoming FRR releases
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 14 Nov 2022 14:08:26 +0100
+
+libpve-network-perl (0.7.1) bullseye; urgency=medium
+
+  * controllers: evpn: use frr restart if reload fails
+
+  * zonee: TAP plug: add support for disable bridge learning and helpers to
+    manage FDB entries manually
+
+  * controllers: evpn: fix multiple exit-nodes with route-map filtering
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Apr 2022 10:33:13 +0200
+
+libpve-network-perl (0.7.0) bullseye; urgency=medium
+
+  * controllers:
+    + allow minus and underscore in IDs again
+    + bgp: use loopback ip src for loopback network
+    + bgp: add bgp-multipath-as-path-relax option
+    + evpn: add min/max value to asn
+    + evpn/bgp : add exitnodes-primary && rework route-map
+    + evpn: add missing bgp router-id in vrf
+    + evpn: remove "no bgp ebgp-requires-policy"
+
+  * zones status: skip reporting on nodes not configured for a zone
+
+  * zones evpn: add rt-import allowing one to import external route target list
+    from external evpn network, e.g., for  DC inter-connect
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 13 Feb 2022 15:04:49 +0100
+
+libpve-network-perl (0.6.2) bullseye; urgency=medium
+
+  * evpn : add "ip route del vrf vrf_myzone unreachable default metric
+    4278198272" on exit node
+
+  * get_local_vnets: add permissions on /sdn/vnets/*
+
+  * evpn : add advertise-subnets and exitnodes-local-routing option
+
+  * vnet/subnet : add skipdns option
+
+  * api: zones: fix update
+
+  * zones: evpn: add disable-arp-nd-suppression option
+
+  * vnets: alias: check pattern and fix regex
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 12 Nov 2021 19:33:54 +0100
+
+libpve-network-perl (0.6.1) bullseye; urgency=medium
+
+  * sdn: get local vnets : add IPAM and VLAN-aware values
+
+  * IPAM: IPv6 fixes
+
+  * subnets/ipam: fix is_gateway helper usage
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 05 Jul 2021 19:07:52 +0200
+
+libpve-network-perl (0.6.0) buster; urgency=medium
+
+  * zones: QinQ: classic bridge: fix bridge zone name with multiple zones/vnets
+
+  * zones: QinQ: ovs: fix duplicate ovs_ports with multiple zones/vnets
+
+  * d/control: fix package description
+
+  * zone: QinQ: add VNet without tag support
+
+  * zone/subnets: fix more cases when no IPAM is defined in the configuration
+
+  * zones: simple, evpn: only enable IP-forwarding if a gateway is defined on
+    the subnet
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 May 2021 10:44:56 +0200
+
+libpve-network-perl (0.5-2) pve; urgency=medium
+
+  * zones: make IPAM config optional for all zone plugins
+
+  * zone status: mark VNets with unknown zone as failed and early return to
+    avoid spamming the log with 'Use of uninitialized value' messages.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 28 Apr 2021 18:25:18 +0200
+
+libpve-network-perl (0.5-1) pve; urgency=medium
+
+  * add foundation for IP Adresss Management (IPAM)
+    + add subnet plugin
+    + vnets: add subnets
+    + zones: simple|evpn: add gateway ip from subnets to vnet
+    + add IPAMs plugins
+    + add DNS plugin
+
+  * fix vnet gateway for routed setup + /32 pointopoint subnet
+
+  * api: generate 'running-config' state instead of version increase on apply
+
+  * api: add running/pending zones/vnets/subnets/controllers
+
+  * zones: evpn : add support for loopback
+
+  * zones: evpn/simple: add missing mask to gateway address
+
+  * evpn: frr: use datacenter default profile (lower timeouts)
+
+  * get local VNets: display vnet alias in comments
+
+  * use canonical ipv6 address (RFC 5952) everywhere
+
+  * zones: evpn: fix exitnodes for SNAT
+
+  * zones: evpn: move vnet mac option to evpn zone plugin
+
+  * zones: evpn: fix arp-accept and ip-forward with IPv6 SNAT
+
+  * zones: simple: fix ip-forward && IPv6 SNAT
+
+  * controllers: increase controllerid to 64 characters max
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 26 Apr 2021 16:51:32 +0200
+
+libpve-network-perl (0.4-7) pve; urgency=medium
+
+  * improve status API
+
+  * use more flexible split_list for ip lists to allow various common separators
+
+  * vnet: make tag optional and verify value in zone plugins
+
+  * add a 'simple' plugin
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 03 Jul 2020 14:14:48 +0200
+
+libpve-network-perl (0.4-6) pve; urgency=medium
+
+  * add vnet vlan-aware option for layer2 plugins
+
+  * vlan: ovs: use dot1q-tunnel with 802.1q when vlanaware is enabled
+
+  * qinq|vlan: ovs: add ovsint interfaces to ovs-ports list
+
+  * vlan|qinq: add mtu to ovsint link port
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 03 Jun 2020 14:15:42 +0200
+
+libpve-network-perl (0.4-5) pve; urgency=medium
+
+  * api: fix reload-all UPID handling
+
+  * restrict zone and vnet names to 8 characters
+
+  * VLAN, QinQ: avoid tagging VM/CT ports directly
+
+  * VXLAN, EVPN: prefix internal interface names
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 May 2020 21:23:01 +0200
+
+libpve-network-perl (0.4-4) pve; urgency=medium
+
+  * only parse version if local sdn file exists
+
+  * d/control: recommend frr-pythontools, ifupdown2
+
+  * vlan plugin: add support for no vlan-aware bridge
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 10 May 2020 17:08:04 +0200
+
+libpve-network-perl (0.4-3) pve; urgency=medium
+
+  * use .version and global lock instead of .new files
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 02 May 2020 19:20:33 +0200
+
+libpve-network-perl (0.4-2) pve; urgency=medium
+
+  * vlan/qinq: use vlan-raw-device to support long predictable interfaces name
+
+  * evpn: add support for local frr.config
+
+  * controller : evpn : only allow 1 evpn controller
+
+  * API2: Vnets: fix update
+
+  * vlan/qinq: use bridge option instead uplink-id
+
+  * move status code to zone plugin
+
+  * qinq, vlanplugin: add status
+
+  * move mtu properties to zone
+
+  * add get_bridge_vlan
+
+  * add tap|veth create|plug
+
+  * add get_local_vnets
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 08 Apr 2020 19:58:10 +0200
+
+libpve-network-perl (0.3-3) pve; urgency=medium
+
+  * evpn: remove uplink-id, auto find interfaces instead
+
+  * zones: vxlan : remove uplink-id (autofind) and multicast (not really used)
+
+  * ensure /etc/pve/sdn directory is created when writing to configuration
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 02 Dec 2019 09:50:39 +0100
+
+libpve-network-perl (0.3-2) pve; urgency=medium
+
+  * add faucet, evpn, qinq Plugins
+
+  * add permissions
+
+  * general refactoring
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 26 Nov 2019 12:56:55 +0100
+
+libpve-network-perl (0.3-1) pve; urgency=medium
+
+  * add FRR plugin
+
+  * VXLAN: add VRF and VRFVXLAN
+
+  * VXLAN: add support for ipv4/ipv6/mac for anycast routing
+
+  * VXLAN: add ip-forward|ip6-forward|arp-accept for routing
+
+  * VXLAN: add gateway-nodes option
+
+  * VXLAN: EVPN: fix routing to local vms on gateway nodes
+
+  * general fixes and improvements
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Sep 2019 16:57:42 +0200
+
+libpve-network-perl (0.2-1) pve; urgency=medium
+
+  * add API
+
+  * improve VNET, VXLAN and VXLAN Multicast plugins
+
+  * use SDN (Software Defined Network) as base module path
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 18 Jun 2019 10:19:25 +0200
+
+libpve-network-perl (0.1-1) unstable; urgency=medium
+
+  * Initial release 
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Mar 2019 12:50:26 +0100
+

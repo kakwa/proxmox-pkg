@@ -1,0 +1,57 @@
+Source: pve-ha-manager
+Section: perl
+Priority: extra
+Maintainer: @MAINTAINER@ <@MAINTAINER_EMAIL@>
+Build-Depends: debhelper-compat (= 13),
+               libglib-perl,
+               libgtk3-perl,
+               libpve-access-control,
+               libpve-cluster-perl,
+               libpve-common-perl (>= 9.2.11),
+               libpve-notify-perl,
+               libpve-rs-perl (>= 0.14.0),
+               libtest-mockmodule-perl <!nocheck>,
+               lintian,
+               pve-cluster,
+               pve-doc-generator (>= 5.3-3),
+Standards-Version: 4.5.1
+
+Package: pve-ha-manager
+Section: perl
+Priority: optional
+Architecture: any
+Depends: libjson-perl,
+         libpve-cluster-perl (>= 9.1.5),
+         libpve-common-perl (>= 9.2.11),
+         libpve-notify-perl (>= 8.1.0),
+         libpve-rs-perl (>= 0.14.0),
+         pve-cluster (>= 3.0-17),
+         pve-container (>= 6.1.24),
+         qemu-server (>= 9.2.19),
+         systemd,
+         ${misc:Depends},
+         ${perl:Depends},
+         ${shlibs:Depends},
+Conflicts: watchdog,
+Description: Proxmox VE HA Manager
+ HA Manager Proxmox VE.
+
+Package: pve-ha-simulator
+Section: perl
+Priority: optional
+Architecture: all
+Depends: libclone-perl,
+         libdevel-cycle-perl,
+         libencode-locale-perl,
+         libfilesys-df-perl,
+         libglib-perl,
+         libgtk3-perl,
+         libhttp-message-perl,
+         libjson-perl,
+         libnet-ip-perl,
+         libstring-shellquote-perl,
+         liburi-perl,
+         ${misc:Depends},
+         ${perl:Depends},
+Description: Proxmox VE HA Simulator
+ This is a simple GUI to simulate the behavior of a Proxmox VE HA cluster.

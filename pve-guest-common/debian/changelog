@@ -1,0 +1,775 @@
+libpve-guest-common-perl (6.0.12) trixie; urgency=medium
+
+  * guest identity: add the common code for the new identity of VMs and
+    containers, a random 'uid' and a registration time in the read-only 'meta'
+    property of the guest config. A VMID can be reused for another guest, and a
+    guest can get another VMID through a restore or a remote migration, so tools
+    like backup software could not tell whether they still see the same guest.
+    - every config write keeps the identity of a guest, or assigns one to a
+      guest without identity. qemu-server and pve-container enable this for
+      their guests.
+    - a restore or a remote migration can adopt the uid of the backup or of the
+      source guest, if no other guest in the cluster has it.
+    - add the 'allow-identity-mismatch' option for restoring a backup over a
+      guest with another uid, and the 'allow-new-uid' option for a remote
+      migration to a cluster where another guest has the uid.
+    - add the check that refuses a migration or clone to a node whose version
+      would drop the identity.
+
+  * vzdump: list the new 'uid' variable in the description of the backup notes
+    template.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Nov 2026 23:35:52 +0100
+
+libpve-guest-common-perl (6.0.11) trixie; urgency=medium
+
+  * storage tunnel: do not treat a disk import that failed to start as a running
+    one. If the tunnel of a remote migration then ended early, the cleanup on
+    the target got skipped and the guest ID stayed reserved there.
+
+  * abstract config:
+    - allow an operation that reserves a guest ID to require that the guest
+      exists. A restore over an existing guest only needs the backup permission
+      on it. If the guest got removed just before the restore reserved the ID,
+      the restore created a new guest, which that permission does not allow.
+    - add a helper that removes the reservation of a guest ID again, for an
+      operation that failed before it changed anything. It only does so while
+      the config still has the lock of the reservation, as the config may be in
+      use otherwise.
+    - allow running code under the config lock of a guest only if the lock is
+      free, without waiting for it. The post-stop hook of a container needs this
+      to change the config safely, as a task that stops the container can hold
+      the lock until the hook is done.
+
+  * guest helpers: add helpers to read the firewall config of a guest and to put
+    it back. A failed restore can then bring back the firewall config from
+    before the restore, also one that existed for an ID without a guest.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 19 Nov 2026 16:12:57 +0100
+
+libpve-guest-common-perl (6.0.10) trixie; urgency=medium
+
+  * abstract config: when reserving a guest ID, check again under the config
+    lock that no guest with that ID exists, unless the caller allows an
+    existing one. The earlier check uses the guest list of the process, which
+    can be outdated, for example if a create or restore of the same ID just
+    finished.
+
+  * snapshot rollback: allow passing options to the start of the guest, which
+    qemu-server uses to override the guest time sync for a single rollback.
+
+  * migration: before an intra-cluster migration, check that the target node
+    can parse the guest config, as already done for remote migrations. This
+    prevents an outdated target from dropping or ignoring settings it does not
+    know yet, like a new option of an existing property. The check needs
+    pve-manager 9.2.31 or newer on both nodes and can be skipped with the new
+    'skip-config-check' migration option of qemu-server and pve-container.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Nov 2026 14:35:24 +0100
+
+libpve-guest-common-perl (6.0.9) trixie; urgency=medium
+
+  * next-id: record previously used guest IDs in the
+    'virtual-guest/used-guest-ids' cluster file for supporting the new 'unique'
+    and 'enforce' datacenter config options. With 'unique', the /cluster/nextid
+    API skips such IDs when suggesting the next free one. With 'enforce', IDs
+    for new guests outside of explicitly configured 'lower' and 'upper'
+    boundaries get rejected, and with 'unique' also previously used IDs.
+
+  * abstract config: register used guest ID when creating config.
+
+  * next-id: keep 'virtual-guest/used-guest-ids' file below the pmxcfs file
+    size limit. If there are too many non-adjacent ranges, the file could grow
+    larger than 1 MiB, so add two thresholds: the first at 512 KiB, at which
+    users are warned that some still available IDs might be dropped in the
+    future to allow merging ranges, and the second at 768 KiB, at which this
+    merging actually happens.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Nov 2026 11:43:56 +0100
+
+libpve-guest-common-perl (6.0.8) trixie; urgency=medium
+
+  * fix #5713: vzdump: add notification-mode none to common backup job
+    properties.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Nov 2026 19:27:39 +0100
+
+libpve-guest-common-perl (6.0.7) trixie; urgency=medium
+
+  * fix #7408: hookscripts: activate the storage of a hookscript before checking
+    for the script. With the script on a storage that was not mounted yet, for
+    example CIFS or NFS when starting a guest on boot, the guest failed to start
+    with "script ... does not exist".
+
+  * hookscripts: do not treat a script as failed if its last line on stderr is
+    exactly "got unknown phase '<phase>'" for the current phase. Scripts copied
+    from the former example hookscript would otherwise abort the start of VMs
+    with passed-through PCI devices on the 'post-pci-prepare' phase.
+
+  * replication, SSH migration tunnel: shell-quote remote command arguments to
+    preserve spaces and special characters.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 05 Nov 2026 22:00:29 +0100
+
+libpve-guest-common-perl (6.0.6) trixie; urgency=medium
+
+  * fix #1964: replication: add the 'skip-freeze-fs' job option to replicate
+    without freezing the guest filesystems. The replication log notes when a
+    running guest is replicated without a freeze.
+
+  * remote migration: add the 'PVEAPIToken=' prefix when the API token lacks it,
+    as the initial API checks already do. Without it, the migration failed
+    midway with "server didn't upgrade: 401 Unauthorized".
+
+  * hookscripts: pass additional, phase-specific parameters to hookscripts as
+    environment variables prefixed with 'PVE_HOOK_'. The new 'post-pci-prepare'
+    phase for VMs uses this to name the prepared PCI device.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Nov 2026 00:05:18 +0100
+
+libpve-guest-common-perl (6.0.5) trixie; urgency=medium
+
+  * tunnel: treat reader_stderr as optional parameter in read_tunnel, fixing a
+    cosmetic log spam issue
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 Jul 2026 13:59:59 +0200
+
+libpve-guest-common-perl (6.0.4) trixie; urgency=medium
+
+  * tunnel: redirect stderr to log function to capture all output
+
+  * storage tunnel: query disk import: adapt to current signature for
+    file_size_info(), removing a distracting deprecation warning
+
+  * storage tunnel: disk migration: bump timeout for image check after import,
+    avoiding migration aborts with big volumes on slow storages
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 17 Jun 2026 10:15:46 +0200
+
+libpve-guest-common-perl (6.0.3) trixie; urgency=medium
+
+  * snapshot: log freeze and thaw of guest filesystem in task log to give
+    operators more visibility on what is happening during snapshot creation.
+
+  * backup: drop the long-deprecated 'maxfiles' parameter, which has been
+    superseded by 'prune-backups' since Proxmox VE 7.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 May 2026 10:47:31 +0200
+
+libpve-guest-common-perl (6.0.2) trixie; urgency=medium
+
+  * replication: avoid printing empty replication network in task log.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Jul 2025 23:45:02 +0200
+
+libpve-guest-common-perl (6.0.1) trixie; urgency=medium
+
+  * backup job: remove 'notification-policy' and 'notification-target'
+    options.
+
+  * replication: follow dedicated datacenter 'replication' options but fall
+    back to migration ones.
+
+  * replication: add used network for replication traffic to the log output.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Jul 2025 21:49:22 +0200
+
+libpve-guest-common-perl (6.0.0) trixie; urgency=medium
+
+  * re-build for Debian 13 Trixie based Proxmox VE 9 release.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Jun 2025 15:25:05 +0200
+
+libpve-guest-common-perl (5.2.2) bookworm; urgency=medium
+
+  * depend on recent enough libpve-cluster-perl version to ensure we can get
+    the content of the directory mapping configuration.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Apr 2025 10:05:42 +0200
+
+libpve-guest-common-perl (5.2.1) bookworm; urgency=medium
+
+  * replication: delete job even if it is disabled
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Apr 2025 22:19:56 +0200
+
+libpve-guest-common-perl (5.2.0) bookworm; urgency=medium
+
+  * storage tunnel: use pve-storage-image-format standard option
+
+  * add section config for directory mappings.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 06 Apr 2025 21:27:44 +0200
+
+libpve-guest-common-perl (5.1.7) bookworm; urgency=medium
+
+  * fix #6130: remote migration: untaint bandwidth limit from remote
+
+  * mapping: pci: check the mdev configuration on the device too
+
+  * mapping: pci: add 'live-migration-capable' opt-in flag to mappings
+
+  * storage tunnel: check just-imported image files to protect against attacks
+    over images on external live-migrations.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Apr 2025 12:00:12 +0200
+
+libpve-guest-common-perl (5.1.6) bookworm; urgency=medium
+
+  * vzdump common: fix syntax error that's failing to load some daemons
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Nov 2024 08:38:39 +0100
+
+libpve-guest-common-perl (5.1.5) bookworm; urgency=medium
+
+  * vzdump: do not declare PBS change-detection mode as experimental anymore
+
+  * abstract config: add abstract method to check for resources preventing a
+    snapshot
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 17 Nov 2024 18:33:11 +0100
+
+libpve-guest-common-perl (5.1.4) bookworm; urgency=medium
+
+  * mappings: improve clarity of error messages
+
+  * mapping: pci: ensure all desired properties are checked
+
+  * vzdump common: allow 'job-id' as a parameter without being in schema to
+    allow making it matchable metadata for in the notification system.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Jul 2024 19:15:05 +0200
+
+libpve-guest-common-perl (5.1.3) bookworm; urgency=medium
+
+  * vzdump: schema: add PBS change detection mode configuration
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 Jun 2024 13:59:12 +0200
+
+libpve-guest-common-perl (5.1.2) bookworm; urgency=medium
+
+  * storage tunnel: fix schema definitions and adhere to it when sending
+    disk-import parameters
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 15 May 2024 19:22:22 +0200
+
+libpve-guest-common-perl (5.1.1) bookworm; urgency=medium
+
+  * replication: snapshot cleanup: only attempt to remove snapshots that exist
+    to fix a minor regression of the last 5.1.0 release
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 18 Apr 2024 10:19:51 +0200
+
+libpve-guest-common-perl (5.1.0) bookworm; urgency=medium
+
+  * replication: prepare: include volumes without snapshots in the result
+
+  * replication: find common base: improve error when no common base snapshot
+    exists
+
+  * replication: avoid that (container) volumes that have the replicate
+    setting turned off explicitly get replicated in some cases.
+
+  * vzdump: schema: add fleecing property string
+
+  * guest helpers: add helper to abort active guest tasks of a certain type
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 17 Apr 2024 17:39:48 +0200
+
+libpve-guest-common-perl (5.0.6) bookworm; urgency=medium
+
+  * vzdump: mark the mailto, mailnotification, notification-target and
+    notification-policy as deprecated.
+
+  * vzdump: add 'notification-mode' param for backup jobs
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Nov 2023 13:31:10 +0100
+
+libpve-guest-common-perl (5.0.5) bookworm; urgency=medium
+
+  * replication: avoid passing removed storages to target
+
+  * partially fix #3069: vzdump config schema: add 'pbs-entries-max' property
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Sep 2023 16:47:16 +0200
+
+libpve-guest-common-perl (5.0.4) bookworm; urgency=medium
+
+  * minor documentation fixups
+
+  * convert log level to lower-case in logging base method
+
+  * vzdump: use worker aware log_warn from rest environment for warn level
+
+  * vzdump: add options for new notification backend
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Jul 2023 15:21:15 +0200
+
+libpve-guest-common-perl (5.0.3) bookworm; urgency=medium
+
+  * abstract config: add method to calculate derived properties from a config
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Jun 2023 19:35:22 +0200
+
+libpve-guest-common-perl (5.0.2) bookworm; urgency=medium
+
+  * add helper for checking access to common bridges and SDN vNets for guests
+
+  * add PCI/USB Mapping configs
+
+  * vzdump: config: improve description of ionice setting
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Jun 2023 19:21:11 +0200
+
+libpve-guest-common-perl (5.0.1) bookworm; urgency=medium
+
+  * vzdump: improve description of bwlimit parameter
+
+  * vzdump: change 'exclude-path' from '-alist' to an array format
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Jun 2023 13:28:44 +0200
+
+libpve-guest-common-perl (5.0.0) bookworm; urgency=medium
+
+  * switch to native versioning scheme
+
+  * build for the Debian 12 Bookworm based Proxmox VE 8.x series
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 May 2023 13:13:51 +0200
+
+libpve-guest-common-perl (4.2-4) bullseye; urgency=medium
+
+  * fix #4572: config: also update volume IDs in pending section
+
+  * config: ensure definedness for iterating pending & snapshot volumes
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Mar 2023 11:54:00 +0100
+
+libpve-guest-common-perl (4.2-3) bullseye; urgency=medium
+
+  * tag helpers: add get_unique_tags method for filtering out duplicates
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Nov 2022 08:17:33 +0100
+
+libpve-guest-common-perl (4.2-2) bullseye; urgency=medium
+
+  * add tag related helper methods
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Nov 2022 13:13:57 +0100
+
+libpve-guest-common-perl (4.2-1) bullseye; urgency=medium
+
+  * add VZDump::JobBase, split out from manager
+
+  * vzdump: handle new jobs.cfg when removing VMIDs from backup jobs
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 12 Nov 2022 16:52:04 +0100
+
+libpve-guest-common-perl (4.1-4) bullseye; urgency=medium
+
+  * vzdump: add 'performance' property string as a setting
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 12 Oct 2022 14:01:36 +0200
+
+libpve-guest-common-perl (4.1-3) bullseye; urgency=medium
+
+  * vzdump config: limit notes template to maximal 1024 characters and update
+    description
+
+  * replication state: purge state from non local guests to avoid issues when
+    guests are moved either manually (not recommended) or by HA on recovery
+
+  * replication state: deterministically order replication jobs, improving
+    handling multiple jobs for the same guest
+
+  * replication: also consider storages from replication state upon removal to
+    prevent left-over volume(s) in some edge cases
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 27 Sep 2022 13:15:50 +0200
+
+libpve-guest-common-perl (4.1-2) bullseye; urgency=medium
+
+  * print snapshot tree: clamp indentation length to positive
+
+  * print snapshot tree: reduce indentation delta per level
+
+  * replication config: retry first three failed times quicker before going to
+    30m. Previously this was done two times.
+
+  * vzdump: schema: add 'notes-template' and 'protected' properties
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Apr 2022 18:51:15 +0200
+
+libpve-guest-common-perl (4.1-1) bullseye; urgency=medium
+
+  * replication: update last_sync before removing old replication
+    snapshots
+
+  * snapshots: delete parent property if new snapshot name is already a
+    parent to existing one
+
+  * config: alaways activate affected storages for snapshot operations
+
+  * migrate: handle migration_network with remote migration
+
+  * migrate: add get_bwlimit helper
+
+  * add tunnel and storage tunnel helper modules
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Feb 2022 18:27:46 +0100
+
+libpve-guest-common-perl (4.0-3) bullseye; urgency=medium
+
+  * fix #3111: improve replication handling, cleaning of blocking snapshots
+    when doing a rollback, and try harder to find common replication base
+
+  * fix #3111: snapshot delete: check if replication still needs it
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 9 Nov 2021 13:14:58 +0100
+
+libpve-guest-common-perl (4.0-2) bullseye; urgency=medium
+
+  * vzdump: remove deprecated size parameter
+
+  * vzdump: defaults: keep all backups by default for 7.0
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 9 Jun 2021 10:06:05 +0200
+
+libpve-guest-common-perl (4.0-1) bullseye; urgency=medium
+
+  * re-build for Debian 11 Bullseye based releases
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 12 May 2021 13:08:20 +0200
+
+libpve-guest-common-perl (3.1-5) buster; urgency=medium
+
+  * vzdump: improve handling 'prune-backups' option in commandline and cron
+    config
+
+  * vzdump: command line: make sure mailto is converted to comma-separated list
+
+  * vzdump: mailto: use email-or-username-list format
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Feb 2021 16:32:14 +0100
+
+libpve-guest-common-perl (3.1-4) pve; urgency=medium
+
+  * vzdump: use more strict regex check for 'mailto'
+
+  * print snapshot tree: reduce indentation
+
+  * replication: improve on various edge cases for moved VMs, for example, if
+    recovered by HA.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 15 Dec 2020 15:52:30 +0100
+
+libpve-guest-common-perl (3.1-3) pve; urgency=medium
+
+  * add prune-backups option to vzdump parameters
+
+  * add move config helper
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Aug 2020 10:12:28 +0200
+
+libpve-guest-common-perl (3.1-2) pve; urgency=medium
+
+  * unbreak config_with_pending_array
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 5 Aug 2020 12:14:41 +0200
+
+libpve-guest-common-perl (3.1-1) pve; urgency=medium
+
+  * fix #2834: skip refs in config_with_pending_array
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 13 Jul 2020 08:57:24 +0200
+
+libpve-guest-common-perl (3.0-11) pve; urgency=medium
+
+  * fix config_with_pending_array for falsy current values
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 07 Jul 2020 18:42:26 +0200
+
+libpve-guest-common-perl (3.0-10) pve; urgency=medium
+
+  * fix versioned breaks on qemu-server
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 5 May 2020 11:41:38 +0200
+
+libpve-guest-common-perl (3.0-9) pve; urgency=medium
+
+  * fix #2682: make sure configuration file is up-to-date for lock_config-variants
+
+  * snapshot_rollback: flock earlier
+
+  * snapshot_rollback: make sure newer replication snapshots are deleted
+
+  * snapshot_delete: check for concurrent modifications at each step
+
+  * lock_config: rename lock_config_mode -> lock_config_shared
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 5 May 2020 11:19:26 +0200
+
+libpve-guest-common-perl (3.0-8) pve; urgency=medium
+
+  * Fix: #2124 add zstd support
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 4 May 2020 14:10:56 +0200
+
+libpve-guest-common-perl (3.0-7) pve; urgency=medium
+
+  * replication: dont declare variable in post-if scope
+
+  * replication: log rate and transport type
+
+  * Use new storage_migrate interface
+
+  * Add update_volume_ids
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 9 Apr 2020 09:40:21 +0200
+
+libpve-guest-common-perl (3.0-6) pve; urgency=medium
+
+  * Add interfaces for volume-related helpers
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 30 Mar 2020 09:20:01 +0200
+
+libpve-guest-common-perl (3.0-5) pve; urgency=medium
+
+  * abstractconfig: add partial_fast_plug
+
+  * config trait: allow to pass arbitrary lock to create_and_lock_config
+
+  * abstractconfig: add prototype for get_backup_volumes
+
+  * avoid cyclic reference in closure
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 12 Mar 2020 11:10:02 +0100
+
+libpve-guest-common-perl (3.0-3) pve; urgency=medium
+
+  * update use statements and dependencies following pve-cluster refactoring
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Nov 2019 12:01:55 +0100
+
+libpve-guest-common-perl (3.0-2) pve; urgency=medium
+
+  * add various config helpers and interfaces for pending changes, backup jobs,
+    snapshot listing, ..
+
+  * maintain the VZDump config property schema and parser writer here, to allow
+    the guest projects to make use of them
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Oct 2019 21:09:16 +0200
+
+libpve-guest-common-perl (3.0-1) pve; urgency=medium
+
+  * rebuild for PVE 6.0 / Debian Buster
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 May 2019 21:02:28 +0200
+
+libpve-guest-common-perl (2.0-20) unstable; urgency=medium
+
+  * add check/exec_hookscript to GuestHelpers
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 01 Feb 2019 12:47:56 +0100
+
+libpve-guest-common-perl (2.0-19) unstable; urgency=medium
+
+  * add bash completion helper for snapshot names
+
+  * fixup some deprecated code usage
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Jan 2019 09:55:20 +0100
+
+libpve-guest-common-perl (2.0-18) unstable; urgency=medium
+
+  * add snapshot rollback hook and remove qemu machine code
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 17 Sep 2018 15:22:50 +0200
+
+libpve-guest-common-perl (2.0-17) unstable; urgency=medium
+
+  * add create_and_lock_config
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 Jun 2018 14:05:32 +0200
+
+libpve-guest-common-perl (2.0-16) unstable; urgency=medium
+
+  * replication: handle guests recovered by HA
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 14 May 2018 11:15:09 +0200
+
+libpve-guest-common-perl (2.0-15) unstable; urgency=medium
+
+  * fix #1694: make failure of snapshot removal non-fatal
+
+  * vzdump: add common log sub-method
+
+  * vzdump: allow all defined log levels
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Apr 2018 11:47:34 +0200
+
+libpve-guest-common-perl (2.0-14) unstable; urgency=medium
+
+  * leave handling or reporting of replication errors to the user of the
+    functions (pve-manager/API)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 13 Dec 2017 12:04:36 +0100
+
+libpve-guest-common-perl (2.0-13) unstable; urgency=medium
+
+  * replication: purge states: verify the vmlist
+
+  * add logfunc in storage_migration.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Oct 2017 15:04:32 +0200
+
+libpve-guest-common-perl (2.0-12) unstable; urgency=medium
+
+  * Fix #1480: locked VMs after trying to delete a non-existent snapshot
+
+  * fix an issue with signal handlers being replaced leading to services not
+    shutting down properly
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 21 Sep 2017 09:46:47 +0200
+
+libpve-guest-common-perl (2.0-11) unstable; urgency=medium
+
+  * replication: always include intermediate snapshots
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 03 Jul 2017 14:50:41 +0200
+
+libpve-guest-common-perl (2.0-10) unstable; urgency=medium
+
+  * replication job_status: add get_disabled parameter
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Jun 2017 10:56:44 +0200
+
+libpve-guest-common-perl (2.0-9) unstable; urgency=medium
+
+  * PVE::Replication - do not use $jobcfg->{vmtype}
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Jun 2017 07:28:37 +0200
+
+libpve-guest-common-perl (2.0-8) unstable; urgency=medium
+
+  * replication: add guest type when fetching a local job config
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 28 Jun 2017 14:32:05 +0200
+
+libpve-guest-common-perl (2.0-7) unstable; urgency=medium
+
+  * replication: add schedule_job_now helper
+
+  * replication: sort time stamps numerically
+
+  * replication: pass $noerr to run_replication_nolock
+
+  * Add new function delete_guest_states
+
+  * replication: don't sync to offline targets on error states
+
+  * replication: keep retrying every 30 minutes in error state
+
+  * PVE::ReplicationState - cleanup job state on job removal
+
+  * PVE/Replication.pm: also log when we thaw the filesystem
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 28 Jun 2017 12:46:45 +0200
+
+libpve-guest-common-perl (2.0-6) unstable; urgency=medium
+
+  * change replication log timestamp to a human readable format
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Jun 2017 13:04:23 +0200
+
+libpve-guest-common-perl (2.0-5) unstable; urgency=medium
+
+  * PVE::AbstractMigrate - new helpers to handle replication jobs
+
+  * PVE::ReplicationState::extract_vmid_tranfer_state - new helper
+
+  * PVE::ReplicationConfig::switch_replication_job_target - new helper
+
+  * PVE/ReplicationConfig.pm: store job id inside job config
+
+  * PVE::Replication::run_replication - add verbose parameter
+
+  * PVE::Replication::run_replication - return replicated $volumes
+
+  * PVE::ReplicationState - new helpers record_job_start/record_job_end
+
+  * PVE::Replication::find_common_replication_snapshot - new helper
+
+  * PVE::ReplicationConfig::find_local_replication_job - new helper
+
+  * replicate_volume: implement rate limit and insecure
+
+  * PVE/ReplicationState.pm: implement write_vmid_job_states
+
+  * Make rollback compatible with storage replication
+
+  * PVE::Replication - pass $cleanup parameter to get_replicatable_volumes
+
+  * PVE::AbstractConfig - add prototype for get_replicatable_volumes
+
+  * PVE::Replication::prepare - allow to pass undefined $jobid
+
+  * add PVE/Replication.pm - moved from pve-manager
+
+  * PVE::ReplicationConfig add delete_job helper
+
+  * PVE::ReplicationState - add job_status, get_next_job,
+    job_logfile_name helpers
+
+  * PVE::ReplicationConfig - new helper parse_replication_job_id
+
+  * PVE::ReplicationConfig - use new ID format "<vmid>-<num>"
+
+  * PVE::ReplicationState - hold guest_migration_lock during state update
+
+  * PVE::ReplicationState - new helper class to read/write replication state
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Jun 2017 08:43:55 +0200
+
+libpve-guest-common-perl (2.0-4) unstable; urgency=medium
+
+  * PVE::GuestHelpers::guest_migration_lock - new helper
+
+  * AbstractConfig.pm: remove code for replicate configuration
+
+  * PVE/ReplicationConfig.pm - new configuratin file for replication
+
+  * migration: use Cluster's new get_ssh_info
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 31 May 2017 09:15:12 +0200
+
+libpve-guest-common-perl (2.0-3) unstable; urgency=medium
+
+  * don't change replica settings on rollback
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Apr 2017 13:56:39 +0200
+
+libpve-guest-common-perl (2.0-2) unstable; urgency=medium
+
+  * PVE/AbstractMigrate.pm: avoid locale specific time stamps
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Apr 2017 07:41:06 +0200
+
+libpve-guest-common-perl (2.0-1) unstable; urgency=medium
+
+  * rebuild for PVE 5.0 / Debian Stretch
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 13 Mar 2017 11:28:54 +0100
+
+libpve-guest-common-perl (1.0-2) unstable; urgency=medium
+
+  * add VZDump base Plugin (moved from pve-manager)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 25 Jan 2017 09:50:54 +0100
+
+libpve-guest-common-perl (1.0-1) unstable; urgency=medium
+
+  * initial release, split out from libe-pve-common-perl
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 24 Jan 2017 14:07:48 +0100

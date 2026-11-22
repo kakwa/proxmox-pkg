@@ -1,0 +1,30 @@
+Source: libpve-http-server-perl
+Section: perl
+Priority: optional
+Maintainer: @MAINTAINER@ <@MAINTAINER_EMAIL@>
+Build-Depends: debhelper-compat (= 13), perl,
+Standards-Version: 4.6.2
+Homepage: https://www.proxmox.com
+
+Package: libpve-http-server-perl
+Architecture: all
+Depends: libanyevent-http-perl,
+         libanyevent-perl (>= 7.140-3),
+         libcrypt-ssleay-perl,
+         libhtml-parser-perl,
+         libhttp-date-perl,
+         libhttp-message-perl,
+         libio-socket-ssl-perl,
+         libjs-bootstrap5,
+         libjson-perl,
+         libnet-ip-perl,
+         libpve-common-perl (>= 8.0.2),
+         liburi-perl,
+         ${misc:Depends},
+         ${perl:Depends},
+Breaks: libpve-storage-perl (<< 8.2.5),
+        pmg-api (<< 8.1.4),
+        pve-manager (<< 8.2.7),
+Description: Proxmox Asynchrounous HTTP Server Implementation
+ This package is used as base to implement the REST API in all perl based
+ Proxmox projects.

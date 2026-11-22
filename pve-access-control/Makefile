@@ -47,4 +47,13 @@ $(SOURCE_ARCHIVE): $(SOURCE_DIR) $(CACHE) Makefile MANIFEST $(DIRECTORIES)
 	@mkdir -p $(SOURCE_DIR)
 	@cp -a $(SOURCE_DIR).tmp/src/. $(SOURCE_DIR)/
 	@rm -rf $(SOURCE_DIR).tmp
+	# Inject build-time stubs for the pve-cluster modules that
+	# PVE::AccessControl loads at compile time.  The real modules are
+	# unavailable here (libpve-cluster-perl declares libpve-access-control
+	# as a build dependency - circular).  The stubs only make the module
+	# graph loadable for manpage/completion generation and are not
+	# installed into the package.
+	@mkdir -p $(SOURCE_DIR)/PVE
+	@cp buildstub/PVE/Cluster.pm $(SOURCE_DIR)/PVE/Cluster.pm
+	@cp buildstub/PVE/DataCenterConfig.pm $(SOURCE_DIR)/PVE/DataCenterConfig.pm
 	@$(SOURCE_TAR_CMD)

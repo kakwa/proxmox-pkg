@@ -130,7 +130,7 @@ rpm:
 deb_chroot:
 	# Initialize output directory as local repo
 	@mkdir -p $(LOCAL_REPO_PATH)
-	@cd $(LOCAL_REPO_PATH) && dpkg-scanpackages . /dev/null > Packages.new.$$$$ && mv -f Packages.new.$$$$ Packages
+	@cd $(LOCAL_REPO_PATH) && dpkg-scanpackages . /dev/null > Packages
 	@$(SUDO) mkdir -p $(COW_DIR)/aptcache/
 	
 	# Initialize or update cowbuilder chroot
@@ -163,7 +163,7 @@ deb_chroot:
 			SKIP_COWBUILDER_SETUP=true;\
 		old=$$new;\
 		new=$$(find ./ -type f -name "failure.chroot.$(DIST).$(ARCH)" | wc -l);\
-		cd $(LOCAL_REPO_PATH) && dpkg-scanpackages . /dev/null >Packages.new.$$$$ || exit 1; mv -f Packages.new.$$$$ Packages;cd -;\
+		cd $(LOCAL_REPO_PATH) && dpkg-scanpackages . /dev/null >Packages || exit 1;cd -;\
 		if [ $$new -ne 0 ];\
 		then\
 			export TMPDIR=/tmp/;\

@@ -55,23 +55,9 @@ DEB_ARCHIVE := $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)_$(VERSION).orig.tar.gz
 # Full deb version
 FULL_VERSION_DEB := $(VERSION)-$(RELEASE)~$(PKG_ORG)+$(DIST_CODE)$(DIST_TAG)
 
-# Debian changelog file
-DEB_CHANGELOG := \
-  $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/changelog
-# Stamp guarding the generated changelog. The changelog itself is pinned to
-# the epoch (see below), so it can never serve as make's up-to-date marker:
-# the stamp carries a normal "now" mtime and is what the build targets
-# actually depend on. Must be defined before DEB_PREPARE (which is expanded
-# immediately with :=).
-DEB_CHANGELOG_STAMP := $(DEB_CHANGELOG).stamp
-
 # Preparation dependencies
-#
-# Note: the generated changelog is referenced through its stamp, not the file
-# itself. The file's mtime is pinned to the epoch for reproducible .debs, so
-# as a normal prerequisite it would look stale on every run and force a full
-# rebuild; as an order-only prerequisite it only guarantees existence.
-DEB_PREPARE := $(DEB_ARCHIVE) $(DEB_CONTENT_OUT) $(DEB_CHANGELOG_STAMP) \
+DEB_PREPARE := $(DEB_ARCHIVE) $(DEB_CONTENT_OUT) \
+  $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/changelog \
   $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/control \
   $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/rules \
   $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/copyright
@@ -81,6 +67,10 @@ DEB_CONTROL_RULE_COPYRIGHT := \
   $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/control \
   $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/rules \
   $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/copyright
+
+# Debian changelog file
+DEB_CHANGELOG := \
+  $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/changelog
 
 # Copy Debian packaging files
 $(DEB_CONTENT_OUT): $(DEB_CONTENT_IN)
@@ -112,38 +102,11 @@ $(DEB_CONTROL_RULE_COPYRIGHT): $(DEB_CONTROL_IN) $(DEB_RULE_IN) $(DEB_COPYRIGHT_
 	@sed -i 's|@FULL_VERSION_DEB@|$(FULL_VERSION_DEB)|' $@ || (rm -f $@; exit 1)
 
 # Generate Debian changelog file
-#
-# The artifact's mtime is pinned to the epoch: dpkg-deb embeds this file as
-# changelog.Debian.gz and the gzip header records the source mtime, so an
-# unpinned mtime makes every rebuild byte-different. Byte-identical debs mean
-# apt's cached hashes stay valid across rebuilds (no "Hash Sum mismatch"
-# while the repo index lags).
-#
-# A pinned mtime cannot also serve make's up-to-date check: the artifact
-# would look stale against every prerequisite on each run, and a recipe that
-# executes - even a no-op one - forces a full rebuild of everything that
-# depends on it. Generation is therefore guarded by a stamp file carrying a
-# normal "now" mtime; the build targets depend on the stamp (via DEB_PREPARE)
-# and on the artifact itself only as an order-only prerequisite.
-$(DEB_CHANGELOG_STAMP): ./debian/changelog Makefile
+$(DEB_CHANGELOG): ./debian/changelog
 	@mkdir -p $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian
-	@{ printf "$(PKGNAME) ($(FULL_VERSION_DEB)) $(DIST); urgency=low\n"; \
-	    printf "\n  * New version\n\n"; \
-	    printf " -- $(MAINTAINER) <$(MAINTAINER_EMAIL)>  %s\n" "Thu, 1 Jan 1970 00:00:00 +0000"; \
-	  } > $(DEB_CHANGELOG).new
-	# Rewrite the artifact only when its content actually changed.
-	@if [ -f $(DEB_CHANGELOG) ] && cmp -s $(DEB_CHANGELOG) $(DEB_CHANGELOG).new; then \
-		rm -f $(DEB_CHANGELOG).new; \
-	else \
-		mv -f $(DEB_CHANGELOG).new $(DEB_CHANGELOG); \
-		touch -d '1970-01-01 00:00:00 +0000' $(DEB_CHANGELOG); \
-	fi
-	@touch $@
-
-# Fallback rule so the artifact exists if it was removed (order-only use in
-# the build targets); a run of this recipe can never trigger a rebuild.
-$(DEB_CHANGELOG): $(DEB_CHANGELOG_STAMP)
-	@:
+	@printf "$(PKGNAME) ($(FULL_VERSION_DEB)) $(DIST); urgency=low\n" > $@
+	@printf "\n  * New version\n\n" >> $@
+	@printf " -- $(MAINTAINER) <$(MAINTAINER_EMAIL)>  %s\n" "Thu, 1 Jan 1970 00:00:00 +0000" >> $@
 
 # Copy source archive to Debian build directory
 $(DEB_ARCHIVE): $(SOURCE_ARCHIVE) | $(DIRECTORIES)
@@ -166,20 +129,12 @@ $(BUILD_DIR)/pkg_built.deb.$(DIST): $(DEB_PREPARE) | $(DIRECTORIES) $(INDIVIDUAL
 		rm -f ../failure.$(DIST); \
 	fi
 	@find $(BUILD_DIR)/ -type f -name "*.deb" -print0 | xargs -0 -r mv -t $(OUT_DIR)/
-	# Copy the canonical source archive only: dpkg-source also leaves a
-	# same-named copy inside the build tree, and copying both to the same
-	# destination makes cp fail ("will not overwrite just-created").
-	@cp -f $(SOURCE_ARCHIVE) $(OUT_SRC)/
+	@find $(BUILD_DIR)/ -type f -name "*.orig.tar.gz" -print0 | xargs -0 -r cp -t $(OUT_SRC)/
 	@find $(BUILD_DIR)/ -type f -name "*.dsc" -print0 | xargs -0 -r mv -t $(OUT_SRC)/
 	@find $(BUILD_DIR)/ -type f -name "*debian.tar.xz" -print0 | xargs -0 -r mv -t $(OUT_SRC)/
 	@touch $@
 
 # Build Debian packages in a clean chroot environment (cowbuilder/pbuilder)
-#
-# Note: dpkg-source -b only needs the debian/ directory (populated by the
-# DEB_PREPARE rules above) plus the existing orig tarball (DEB_ARCHIVE) in
-# the parent directory; it does not require the full source tree to be
-# extracted here. pbuilder extracts the orig tarball inside the chroot.
 $(BUILD_DIR)/pkg_built_chroot.deb.$(DIST): $(DEB_PREPARE) | $(DIRECTORIES) $(INDIVIDUAL_DEB_LOCAL_REPO_PATH)/Packages
 	@cd $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION) && dpkg-source -b ./
 	@$(SUDO) mkdir -p $(COW_DIR)/aptcache/
@@ -204,19 +159,10 @@ $(BUILD_DIR)/pkg_built_chroot.deb.$(DIST): $(DEB_PREPARE) | $(DIRECTORIES) $(IND
 		fi; exit $$ret;'; \
 	fi
 	
-	# Drop stale result debs first: the repository holds hardlinks to them, and
-	# an in-place overwrite of a shared inode is not atomic (a parallel chroot
-	# reading the repo could observe the file truncated). Fresh inodes are
-	# created by the build and atomically relinked into the repo below.
-	@rm -f $(OUT_DIR)/*.deb
-	# Build package in chroot.
-	# --hookdir installs the shared pbuilder hooks (notably D10update-local-repo,
-	# which refreshes the local file:// repo's apt index inside the chroot
-	# before satisfydepends, so deps built earlier in the same pass are visible).
+	# Build package in chroot
 	@export TMPDIR=/tmp/; \
 	$(SUDO) $(BUILDER) --build \
 		--buildresult $(shell pwd)/$(OUT_DIR)/ \
-		--hookdir=$(shell pwd)/buildenv/pbuilder.hooks/ \
 		$(COWBUILDER_BUILD_ARGS) \
 		$(BUILD_DIR)/deb.$(DIST)/*.dsc; \
 	if [ $$? -ne 0 ]; then \
@@ -233,27 +179,18 @@ $(BUILD_DIR)/pkg_built_chroot.deb.$(DIST): $(DEB_PREPARE) | $(DIRECTORIES) $(IND
 	@find $(OUT_DIR)/ -type f -name "*.buildinfo" -print0 | xargs -0 -r mv -t $(OUT_SRC)/
 	@find $(OUT_DIR)/ -type f -name "*debian.tar.xz" -print0 | xargs -0 -r mv -t $(OUT_SRC)/
 	
-	# Link built packages to local repository.
-	# The repository is a file:// source bind-mounted into every running
-	# chroot, so updates must be atomic (temp name + rename); a non-atomic
-	# in-place rewrite can be observed half-written by apt in a parallel
-	# build (hash sum mismatch / unresolvable dependencies).
-	# The mv is guarded: if the repository already holds a hardlink to this
-	# exact file (same inode, e.g. a previous build whose result file was
-	# reused), "mv" reports "same file" and would fail the whole build.
+	# Link built packages to local repository
 	@find $(OUT_DIR) -type f -name "*$(DIST_CODE)$(DIST_TAG)*$(ARCH)*.deb" -print0 | \
-		xargs -0 -r -I{} sh -c 'b=$$(basename "$$1"); t="$$2/$$b.tmp"; f="$$2/$$b"; ln -f "$$1" "$$t" 2>/dev/null; if [ "$$(readlink -f "$$t")" = "$$(readlink -f "$$f")" ]; then rm -f "$$t"; else mv -f "$$t" "$$f"; fi' _ {} $(INDIVIDUAL_DEB_LOCAL_REPO_PATH)
+		xargs -0 -r ln -f -t $(INDIVIDUAL_DEB_LOCAL_REPO_PATH)/
 	@find $(OUT_DIR) -type f -name "*$(DIST_CODE)$(DIST_TAG)*all*.deb" -print0 | \
-		xargs -0 -r -I{} sh -c 'b=$$(basename "$$1"); t="$$2/$$b.tmp"; f="$$2/$$b"; ln -f "$$1" "$$t" 2>/dev/null; if [ "$$(readlink -f "$$t")" = "$$(readlink -f "$$f")" ]; then rm -f "$$t"; else mv -f "$$t" "$$f"; fi' _ {} $(INDIVIDUAL_DEB_LOCAL_REPO_PATH)
-
-	# Rescan the package index after every relink (serialized with flock for
-	# parallel builds, atomic rename so apt never sees a half-written file).
-	# The build chroots re-read this file on their own apt-get update (see
-	# pbuilder.hooks/D10update-local-repo), so the index and the repository
-	# contents stay consistent and packages built earlier in the same pass
-	# are visible to satisfydepends of later builds.
-	@REPO_PATH="$(INDIVIDUAL_DEB_LOCAL_REPO_PATH)" flock -x /tmp/debrepo.$(DIST).$(ARCH).lock sh -c \
-		'cd "$$REPO_PATH" && dpkg-scanpackages . /dev/null > Packages.new.$$$$ && mv -f Packages.new.$$$$ Packages'
+		xargs -0 -r ln -f -t $(INDIVIDUAL_DEB_LOCAL_REPO_PATH)/
+	
+	# Update package index if requested
+	@if [ "$(UPDATE_REPO)" = "true" ]; then \
+		cd $(INDIVIDUAL_DEB_LOCAL_REPO_PATH)/ && \
+		dpkg-scanpackages . > Packages && \
+		cd -; \
+	fi
 	
 	# Set the build success marker
 	@touch $@
@@ -264,7 +201,7 @@ deb_get_chroot_path:
 
 
 deb_shell_chroot:
-	@-$(MAKE) deb_chroot
+	@-$(MAKE) deb_chroot COWBUILD_BUILD_ADDITIONAL_ARGS="$(COWBUILD_BUILD_ADDITIONAL_ARGS) --hookdir=$(shell pwd)/buildenv/pbuilder.hooks/"
 
 # Conditional targets based on the TO_SKIP variable
 ifneq ($(TO_SKIP), true)

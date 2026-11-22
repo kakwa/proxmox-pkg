@@ -1,0 +1,3 @@
+pve-cluster/PVE/Cluster.pm usr/share/perl5/PVE/
+pve-cluster/PVE/IPCC.pm usr/share/perl5/PVE/
+pve-cluster/PVE/Cluster/IPCConst.pm usr/share/perl5/PVE/Cluster/

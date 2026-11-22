@@ -1,0 +1,4 @@
+libpve-cluster-perl/PVE/Corosync.pm usr/share/perl5/PVE/
+libpve-cluster-perl/PVE/DataCenterConfig.pm usr/share/perl5/PVE/
+libpve-cluster-perl/PVE/RRD.pm usr/share/perl5/PVE/
+libpve-cluster-perl/PVE/SSHInfo.pm usr/share/perl5/PVE/

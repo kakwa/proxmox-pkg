@@ -55,6 +55,16 @@ DEB_ARCHIVE := $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)_$(VERSION).orig.tar.gz
 # Full deb version
 FULL_VERSION_DEB := $(VERSION)-$(RELEASE)~$(PKG_ORG)+$(DIST_CODE)$(DIST_TAG)
 
+# Debian changelog file
+DEB_CHANGELOG := \
+  $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/changelog
+# Stamp guarding the generated changelog. The changelog itself is pinned to
+# the epoch (see below), so it can never serve as make's up-to-date marker:
+# the stamp carries a normal "now" mtime and is what the build targets
+# actually depend on. Must be defined before DEB_PREPARE (which is expanded
+# immediately with :=).
+DEB_CHANGELOG_STAMP := $(DEB_CHANGELOG).stamp
+
 # Preparation dependencies
 #
 # Note: the generated changelog is referenced through its stamp, not the file
@@ -71,15 +81,6 @@ DEB_CONTROL_RULE_COPYRIGHT := \
   $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/control \
   $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/rules \
   $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/copyright
-
-# Debian changelog file
-DEB_CHANGELOG := \
-  $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian/changelog
-# Stamp guarding the generated changelog. The changelog itself is pinned to
-# the epoch (see below), so it can never serve as make's up-to-date marker:
-# the stamp carries a normal "now" mtime and is what the build targets
-# actually depend on.
-DEB_CHANGELOG_STAMP := $(DEB_CHANGELOG).stamp
 
 # Copy Debian packaging files
 $(DEB_CONTENT_OUT): $(DEB_CONTENT_IN)

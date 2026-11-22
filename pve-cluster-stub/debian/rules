@@ -1,0 +1,24 @@
+#!/usr/bin/make -f
+
+# Build the PVE::IPCC XS extension, mirroring pve-cluster's own
+# PVE/Makefile (xsubpp + gcc + libqb). -Werror is dropped on purpose:
+# this is a build stub and must not break on new compiler warnings.
+IPCC_CFLAGS = -fPIC -Wall -Wno-strict-aliasing -g -O2 \
+	$(shell pkg-config --cflags libqb) \
+	$(shell perl -MExtUtils::Embed -e perl_inc) \
+	-I../pmxcfs
+IPCC_LDFLAGS = $(shell pkg-config --libs libqb)
+VENDORARCH = $(shell perl -MConfig -e 'print $$Config{vendorarch}')
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cd pve-cluster/PVE && xsubpp -noversioncheck IPCC.xs > IPCC.c && \
+	gcc $(IPCC_CFLAGS) -c -o IPCC.o IPCC.c && \
+	gcc $(IPCC_CFLAGS) -shared -o IPCC.so IPCC.o $(IPCC_LDFLAGS)
+
+override_dh_install:
+	dh_install
+	install -d debian/pve-cluster/$(VENDORARCH)/auto/PVE/IPCC
+	install -m 0644 pve-cluster/PVE/IPCC.so debian/pve-cluster/$(VENDORARCH)/auto/PVE/IPCC/IPCC.so

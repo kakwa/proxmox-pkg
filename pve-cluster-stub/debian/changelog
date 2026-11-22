@@ -1,0 +1,7 @@
+pve-cluster-stub (9.1.15-1~amk+deb15) sid; urgency=low
+
+  * Build stub: pve-cluster Perl modules as Architecture:all packages
+    to break the pve-cluster/pve-access-control build cycle in
+    from-scratch builds.
+
+ -- kakwa <carpentier.pf@gmail.com>  Sun, 22 Nov 2026 19:00:00 +0100

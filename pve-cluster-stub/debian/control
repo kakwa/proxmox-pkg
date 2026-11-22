@@ -1,0 +1,41 @@
+Source: pve-cluster-stub
+Section: perl
+Priority: optional
+Maintainer: @MAINTAINER@ <@MAINTAINER_EMAIL@>
+Build-Depends: debhelper-compat (= 13),
+               build-essential,
+               libcrypt-dev,
+               libqb-dev,
+               pkg-config,
+               perl,
+Standards-Version: 4.6.2
+Homepage: @URL@
+
+Package: pve-cluster
+Architecture: all
+# libqb100 is listed manually: dh_shlibdeps is skipped for Architecture:all
+# packages, but the bundled PVE/IPCC/IPCC.so links against libqb (SONAME 100).
+Depends: libpve-common-perl,
+         libqb100,
+         ${misc:Depends},
+         ${perl:Depends},
+Description: @SUMMARY@
+ @DESCRIPTION@
+ This is a build-environment stub, not the real pve-cluster service: it
+ only ships the Perl modules, without the pmxcfs daemon, corosync or
+ pvecm. It exists so that pve-container's build-dep chain can be built
+ from scratch in this repository without access to the official Proxmox
+ apt repository.
+
+Package: libpve-cluster-perl
+Architecture: all
+Depends: libpve-common-perl,
+         librrds-perl,
+         pve-cluster (= @FULL_VERSION_DEB@),
+         ${misc:Depends},
+         ${perl:Depends},
+Description: Proxmox VE cluster configuration library (build stub)
+ Perl modules from the pve-cluster package (PVE::Corosync,
+ PVE::DataCenterConfig, PVE::RRD, PVE::SSHInfo), shipped as
+ Architecture:all so they can satisfy build dependencies in a
+ from-scratch build without the real pve-cluster binary package.

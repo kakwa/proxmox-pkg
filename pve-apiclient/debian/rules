@@ -3,7 +3,14 @@
 # output every command that modifies files on the build system.
 #DH_VERBOSE = 1
 
+# The upstream top-level Makefile is a packaging wrapper whose `all`
+# target runs dpkg-buildpackage itself; do not let debhelper invoke it.
+override_dh_auto_build:
+
+override_dh_auto_install:
+	# The perl modules live in src/ and are installed by src/Makefile
+	# into $(DESTDIR)/usr/share/perl5 (plus doc examples).
+	make -C src install DESTDIR=$(CURDIR)/debian/libpve-apiclient-perl
 
 %:
 	dh $@
-

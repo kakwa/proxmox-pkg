@@ -1,0 +1,27 @@
+Use a no-op linter when proxmox-biome is not available.
+
+proxmox-biome is only available from the Proxmox repositories, not from
+plain Debian. The build (make install) runs the linter as a prerequisite
+of the proxmoxlib.js concatenation, so fall back to /bin/true when the
+tool is missing to keep the package buildable.
+
+---
+ Makefile | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+--- a/Makefile
++++ b/Makefile
+@@ -1,7 +1,12 @@
+ include defines.mk
+ 
+-BIOME ?= proxmox-biome
++# proxmox-biome is only available from the Proxmox repositories. Fall
++# back to a no-op linter when it is not installed, so the package can
++# be built from plain Debian sources.
++ifeq ($(shell command -v $(or $(BIOME),proxmox-biome) 2>/dev/null),)
++BIOME := /bin/true
++endif
+ 
+ SUBDIRS= css images proxmox-dark
+ 
+ # bundle it for now from the libjs-marked debian package to avoid touching our proxies file mapper,

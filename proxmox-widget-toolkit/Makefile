@@ -32,7 +32,19 @@ URL_SRC = https://github.com/proxmox/proxmox-widget-toolkit/archive/$(HASH).tar.
 
 include buildenv/Makefile.common
 
+# The GitHub tarball is the full git repository, whose top-level Makefile
+# only assembles the real source package: the *contents* of src/ plus
+# debian/ (see upstream Makefile's $(BUILDDIR) rule). Reproduce that layout
+# so that dpkg-buildpackage runs the build Makefile that lives in src/
+# upstream (dh_auto_build / dh_auto_install), instead of the empty driver
+# Makefile at the repository root.
 $(SOURCE_ARCHIVE): $(SOURCE_DIR) $(CACHE) Makefile MANIFEST $(DIRECTORIES)
 	@$(WGS) -u $(URL_SRC) -O proxmox-widget-toolkit-$(VERSION).tar.gz
-	@tar -xf $(CACHE_DIR)/proxmox-widget-toolkit-$(VERSION).tar.gz -C $(SOURCE_DIR) --strip-components=1
+	@rm -rf $(SOURCE_DIR).tmp
+	@mkdir -p $(SOURCE_DIR).tmp
+	@tar -xf $(CACHE_DIR)/proxmox-widget-toolkit-$(VERSION).tar.gz -C $(SOURCE_DIR).tmp --strip-components=1
+	@rm -rf $(SOURCE_DIR)
+	@mkdir -p $(SOURCE_DIR)
+	@cp -a $(SOURCE_DIR).tmp/src/. $(SOURCE_DIR)/
+	@rm -rf $(SOURCE_DIR).tmp
 	@$(SOURCE_TAR_CMD)

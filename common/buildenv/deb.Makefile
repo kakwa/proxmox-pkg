@@ -111,16 +111,38 @@ $(DEB_CONTROL_RULE_COPYRIGHT): $(DEB_CONTROL_IN) $(DEB_RULE_IN) $(DEB_COPYRIGHT_
 	@sed -i 's|@FULL_VERSION_DEB@|$(FULL_VERSION_DEB)|' $@ || (rm -f $@; exit 1)
 
 # Generate Debian changelog file
-$(DEB_CHANGELOG): ./debian/changelog
+#
+# The artifact's mtime is pinned to the epoch: dpkg-deb embeds this file as
+# changelog.Debian.gz and the gzip header records the source mtime, so an
+# unpinned mtime makes every rebuild byte-different. Byte-identical debs mean
+# apt's cached hashes stay valid across rebuilds (no "Hash Sum mismatch"
+# while the repo index lags).
+#
+# A pinned mtime cannot also serve make's up-to-date check: the artifact
+# would look stale against every prerequisite on each run, and a recipe that
+# executes - even a no-op one - forces a full rebuild of everything that
+# depends on it. Generation is therefore guarded by a stamp file carrying a
+# normal "now" mtime; the build targets depend on the stamp (via DEB_PREPARE)
+# and on the artifact itself only as an order-only prerequisite.
+$(DEB_CHANGELOG_STAMP): ./debian/changelog Makefile
 	@mkdir -p $(BUILD_DIR)/deb.$(DIST)/$(PKGNAME)-$(VERSION)/debian
-	@printf "$(PKGNAME) ($(FULL_VERSION_DEB)) $(DIST); urgency=low\n" > $@
-	@printf "\n  * New version\n\n" >> $@
-	@printf " -- $(MAINTAINER) <$(MAINTAINER_EMAIL)>  %s\n" "Thu, 1 Jan 1970 00:00:00 +0000" >> $@
-	# Pin the mtime: dpkg-deb embeds this file as changelog.Debian.gz and the
-	# gzip header records the source mtime, so an unpinned mtime makes every
-	# rebuild byte-different. Byte-identical debs mean apt's cached hashes stay
-	# valid across rebuilds (no "Hash Sum mismatch" while the repo index lags).
-	@touch -d '1970-01-01 00:00:00 +0000' $@
+	@{ printf "$(PKGNAME) ($(FULL_VERSION_DEB)) $(DIST); urgency=low\n"; \
+	    printf "\n  * New version\n\n"; \
+	    printf " -- $(MAINTAINER) <$(MAINTAINER_EMAIL)>  %s\n" "Thu, 1 Jan 1970 00:00:00 +0000"; \
+	  } > $(DEB_CHANGELOG).new
+	# Rewrite the artifact only when its content actually changed.
+	@if [ -f $(DEB_CHANGELOG) ] && cmp -s $(DEB_CHANGELOG) $(DEB_CHANGELOG).new; then \
+		rm -f $(DEB_CHANGELOG).new; \
+	else \
+		mv -f $(DEB_CHANGELOG).new $(DEB_CHANGELOG); \
+		touch -d '1970-01-01 00:00:00 +0000' $(DEB_CHANGELOG); \
+	fi
+	@touch $@
+
+# Fallback rule so the artifact exists if it was removed (order-only use in
+# the build targets); a run of this recipe can never trigger a rebuild.
+$(DEB_CHANGELOG): $(DEB_CHANGELOG_STAMP)
+	@:
 
 # Copy source archive to Debian build directory
 $(DEB_ARCHIVE): $(SOURCE_ARCHIVE) | $(DIRECTORIES)

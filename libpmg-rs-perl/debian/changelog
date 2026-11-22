@@ -1,0 +1,5 @@
+libpmg-rs-perl (0.8.3-1) sid; urgency=medium
+
+  * Initial packaging of upstream commit 74be7b1ef54e7bbaa0419d7c01adf24f94505e2d.
+
+ -- kakwa <carpentier.pf@gmail.com>  Sun, 22 Nov 2026 00:00:00 +0000

@@ -1,0 +1,2 @@
+git clone https://github.com/proxmox/proxmox-perl-rs.git
+git checkout 74be7b1ef54e7bbaa0419d7c01adf24f94505e2d

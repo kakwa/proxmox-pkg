@@ -1,0 +1,5 @@
+perlmod-bin (0.3.0-1) sid; urgency=medium
+
+  * Initial packaging of upstream commit 3a667956097b361a9ef40fa8a2f6c0e26711b025.
+
+ -- kakwa <carpentier.pf@gmail.com>  Sun, 22 Nov 2026 00:00:00 +0000

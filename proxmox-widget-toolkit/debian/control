@@ -1,0 +1,24 @@
+Source: proxmox-widget-toolkit
+Section: web
+Priority: optional
+Maintainer: @MAINTAINER@ <@MAINTAINER_EMAIL@>
+Build-Depends: debhelper-compat (= 13),
+               libjs-marked,
+               sassc,
+               uglifyjs,
+Standards-Version: 4.6.2
+Homepage: https://www.proxmox.com
+
+Package: proxmox-widget-toolkit
+Architecture: all
+Depends: ${misc:Depends}
+Description: Core Widgets and ExtJS Helper Classes for Proxmox Web UIs
+ The base framework providing widgets, models, and general utilities for the
+ ExtJS based Web UIs of various Proxmox projects
+
+Package: proxmox-widget-toolkit-dev
+Architecture: all
+Depends: ${misc:Depends}
+Description: ExtJS based widgets and utilities for development
+ Contains some common JavaScript code that some Proxmox projects might used to
+ build common interfaces, like the API viewer in each documnetation repo.

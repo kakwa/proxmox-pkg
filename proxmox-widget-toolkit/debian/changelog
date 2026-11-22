@@ -1,0 +1,2214 @@
+proxmox-widget-toolkit (5.2.18) trixie; urgency=medium
+
+  * checkbox model: keep the rows as they were when a listener blocks their
+    selection or deselection, instead of failing with a TypeError.
+
+  * checkbox model: stop a selection that replaces the current one if a
+    listener blocks the deselection of a row, instead of selecting the new
+    rows next to the blocked one.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 22 Nov 2026 00:30:37 +0100
+
+proxmox-widget-toolkit (5.2.17) trixie; urgency=medium
+
+  * object grid: delete an option when its text area, such as the consent
+    text, is cleared, instead of submitting an empty value.
+
+  * node: network: add columns for the bond primary, VRF, IPv4 forwarding and
+    bridge VLAN IDs, hidden by default, to compare these settings across all
+    interfaces. The VRF, IPv4 forwarding and bridge VLAN IDs columns are only
+    offered by products that support editing these settings.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 21 Nov 2026 18:52:33 +0100
+
+proxmox-widget-toolkit (5.2.16) trixie; urgency=medium
+
+  * node: network: add a VRF field for host interfaces, for products that
+    provide a VRF selector.
+
+  * node: network: add an IPv4 forwarding setting with default, enabled and
+    disabled, for products that support it. Enabling it is suggested when a
+    VRF is selected, as interfaces that receive routed traffic need it.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Nov 2026 05:43:49 +0100
+
+proxmox-widget-toolkit (5.2.15) trixie; urgency=medium
+
+  * add access log view, which lists the requests of the API access log
+    of a node, newest first, with live mode, time range, search and
+    filters for user, client, method, status and path. A statistics
+    window shows request and error counts per client, user, path group
+    and status, and a histogram; opening a value narrows the view to its
+    requests.
+
+  * apt: encode values from the repository files and from the Release files
+    of the configured mirrors, like the origin, in the repository and
+    update panels, so that such files cannot inject markup.
+
+  * apt: allow products to show pending updates and repositories to users
+    who may only audit the node. The actions that need more privileges get
+    disabled instead of failing with a permission error.
+
+  * apt: add a history panel listing the past APT transactions of a node,
+    with when and how they were invoked, what they changed and whether they
+    failed. This helps to find the update that could have caused a
+    regression, or what happened during a failed upgrade:
+    - upgrades between major releases of Debian or Ceph are marked, and the
+      list can be filtered by them, by status, time range and changed
+      packages, and searched by command line and user.
+    - the selected transaction shows its package changes, its terminal
+      output with warnings and errors highlighted, and in a separate tab
+      the changelogs of all packages it changed, grouped by source package.
+    - the changelog of a changed package opens limited to the versions of
+      that change, with an adjustable range.
+    - changelog entries are shown as structured lists, linking CVE IDs,
+      closed Debian bugs and, for Proxmox packages, the fixed Bugzilla
+      entries.
+
+  * apt: updates: products can enable a button that shows the changelogs of
+    all pending updates at once, grouped by source package and limited to
+    the new versions.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Nov 2026 02:34:23 +0100
+
+proxmox-widget-toolkit (5.2.14) trixie; urgency=medium
+
+  * form: add a plain 'proxmoxtextarea' field for multi-line text. Like the
+    text field, it can omit or delete an empty value on submit. The base64
+    text area now builds on it, with no change in behavior intended.
+
+  * utils: add a helper to construct a form field from the JSON schema of a
+    single property, so that edit windows can be generated from a schema
+    instead of being hard-coded:
+    - supports string, integer, number, boolean and enum properties, and maps
+      their limits, default and description to the field.
+    - text and number fields show the default only as a hint, so that unset
+      properties stay unset.
+    - fields can be marked as read-only or as sensitive. A sensitive field
+      keeps the stored value if left empty when editing, and hides its input
+      unless it is a multi-line one.
+
+  * acme: plugin edit: create the DNS API fields with the new helper, with no
+    visible change intended.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Nov 2026 02:41:15 +0100
+
+proxmox-widget-toolkit (5.2.13) trixie; urgency=medium
+
+  * encode more values that come from the API or other external sources
+    before showing them, so that they cannot inject HTML into the page:
+    - read-only display fields now show their value as plain text by
+      default. Fields that intentionally show formatted text, like the
+      consent banner, opt out explicitly.
+    - certificate viewer: encode the subject alternative names.
+    - key-value combo box: encode a rejected value in the validation error.
+    - network edit window: encode the alternative interface names.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 10 Nov 2026 21:52:50 +0100
+
+proxmox-widget-toolkit (5.2.12) trixie; urgency=medium
+
+  * notifications: matcher: add a new editor for match rules, which products
+    enable once their API supports the 'expression' option:
+    - rules can be nested and combine calendar, field and severity rules with
+      all-of, any-of, one-of and their negations at any depth.
+    - calendar rules are set through start and end time fields and weekday
+      checkboxes, instead of a time range string like 'mon..tue 08:00-12:00'.
+    - existing matchers are loaded as an equivalent expression when edited.
+
+  * notifications: matcher: widen the edit window for its two-column layout,
+    and use title case consistently for its labels.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 04 Nov 2026 22:39:37 +0100
+
+proxmox-widget-toolkit (5.2.11) trixie; urgency=medium
+
+  * fix #6943: network selector: show the comments of IPv6 entries, for
+    example when selecting corosync links or Ceph networks. The comment of
+    IPv6-only interfaces was dropped, and the IPv6 entry of dual-stack
+    interfaces had none.
+
+  * language map: add Bengali, Greek, Irish, Lao and Mongolian as available
+    languages.
+
+  * fix rendering error messages with multiple lines in the error mask of
+    views, which showed the line break tags literally, for example in the
+    Proxmox Backup Server web interface.
+
+  * give the icon buttons of grid action columns an accessible name from
+    their tooltip, so that screen readers no longer announce them as unnamed
+    buttons.
+
+  * fix #7294: dark theme: show the icon of VNets in resource pools with full
+    opacity, so that it stays clearly visible.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Nov 2026 00:11:36 +0100
+
+proxmox-widget-toolkit (5.2.10) trixie; urgency=medium
+
+  * api-viewer: fix handling of 'null' return schema
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Sep 2026 14:08:15 +0200
+
+proxmox-widget-toolkit (5.2.9) trixie; urgency=medium
+
+  * api-viewer: support allOf and oneOf in return type information
+
+  * fix #7721: fix zoom interaction on charts with no initial store
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 11 Sep 2026 11:12:56 +0200
+
+proxmox-widget-toolkit (5.2.8) trixie; urgency=medium
+
+  * tfa, webauthn, alertResponseFailure helper: htmlEncode error messages.
+
+  * object grids: htmlEncode values by default.
+
+  * utils: render optional url: encode and normalize the url.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Aug 2026 14:18:57 +0200
+
+proxmox-widget-toolkit (5.2.7) trixie; urgency=medium
+
+  * api-viewer: support allOf schemas and render oneOf variants properly.
+
+  * fix #7426: network: use the correct name tooltips for the interface
+    types.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 04 Aug 2026 00:30:32 +0200
+
+proxmox-widget-toolkit (5.2.6) trixie; urgency=medium
+
+  * fix #5076: authentication realm edit: add an optional "audiences" field
+    for OpenID Connect realms
+
+  * journal view:
+    - add an opt-in structured mode that colors log entries by syslog
+      priority, marks reboots and indents multi-line messages
+    - add server-side filters for minimum priority, systemd unit, syslog
+      identifier glob and kernel-only messages, grouped in a collapsible
+      filter section with a reset
+    - open the per-service node log in the structured view
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 28 Jun 2026 19:51:56 +0200
+
+proxmox-widget-toolkit (5.2.5) trixie; urgency=medium
+
+  * utils: response error: gather detail lines of multi-line messages.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 10 Jun 2026 19:35:19 +0200
+
+proxmox-widget-toolkit (5.2.4) trixie; urgency=medium
+
+  * fix #5076: authentication realm edit: add an optional "audiences" field
+    for OpenID Connect (OIDC) realms which allows users to configure
+    additional OIDC audiences that may be provided by the OIDC realm.
+
+  * css: vertically align the icon and label of tab buttons.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 09 Jun 2026 23:46:17 +0200
+
+proxmox-widget-toolkit (5.2.3) trixie; urgency=medium
+
+  * location edit: support pasting coordinate pairs and map service URLs into
+    the latitude or longitude field. Detects plain decimal pairs (comma,
+    semicolon, or whitespace separated), OpenStreetMap permalinks and marker
+    URLs, and the common Google Maps URL forms. A hint links to OpenStreetMap
+    and notes how to obtain coordinates from a map service.
+
+  * vtypes: list '-' in the allowed-characters help text for config IDs; the
+    validation regex already permits it.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 26 May 2026 16:26:59 +0200
+
+proxmox-widget-toolkit (5.2.2) trixie; urgency=medium
+
+  * location edit: reject `,` and `=` in the name field so the value cannot
+    inject extra latitude/longitude key-value pairs into the property string.
+    The backend still validates anyway, but rejecting these characters
+    client-side gives immediate feedback.
+
+  * location renderer: extend the OpenStreetMap link with `mlat`/`mlon`
+    parameters so the linked map drops a marker on the exact coordinates
+    rather than only being centered on them.
+
+  * utils: render CPU usage via `ngettext` so translators can produce a proper
+    singular form (for example "{0}% of 1 CPU") instead of relying on the
+    previous "CPU(s)" fallback.
+
+  * window: ACMEDomains: surface a translated error dialog when adding a
+    domain would exceed the per-instance limit. Previously the operation
+    failed silently for the user, with only a console log entry.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 May 2026 20:31:32 +0200
+
+proxmox-widget-toolkit (5.2.1) trixie; urgency=medium
+
+  * markdown: keep HTML comment nodes in the sanitized output, restoring
+    pre-5.2.0 behavior. Admins use comments in notes to embed metadata that is
+    hidden from the rendered view but stays inspectable in the source.
+
+  * css: move the `x-grid-row-loading` class definition into the
+    widget-toolkit so that consumers which previously each carried an
+    identical copy can drop them.
+
+  * add a window for editing locations (a property-string with a name and
+    coordinates) together with a renderer that links the coordinates to the
+    matching spot on OpenStreetMap, for use with the new per-node and
+    per-datacenter `location` properties.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 May 2026 11:50:37 +0200
+
+proxmox-widget-toolkit (5.2.0) trixie; urgency=medium
+
+  * confirm remove dialog: improve layout to fit larger fields and components
+    without cutting off content.
+
+  * markdown: harden the HTML sanitizer by switching to an explicit element and
+    attribute allowlist and namespacing `id`/`name` (and same-document fragment
+    links pointing to them) to prevent DOM clobbering of the surrounding admin
+    UI, plus several smaller hardenings to URL-scheme handling and walker
+    robustness.
+    Allow a curated subset of presentation MathML in notes so that
+    admins can embed the calculations they used to derive a configuration.
+
+  * markdown: add a `renderInto` helper that, on browsers exposing the
+    Sanitizer API (Chromium and Firefox), prefers `Element.setHTML` as a
+    second-gate parse step for defense in depth, transparently falling back to
+    `innerHTML` elsewhere.
+
+  * task viewer: derive end-time from the polled task status when the caller
+    did not pass one in, so finished tasks show the correct duration.
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 03 May 2026 20:37:32 +0200
+
+proxmox-widget-toolkit (5.1.9) trixie; urgency=medium
+
+  * markdown: add 'base' tag to encoded html tags to avoid potential UI
+    glitches.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 10 Apr 2026 13:15:53 +0200
+
+proxmox-widget-toolkit (5.1.8) trixie; urgency=medium
+
+  * fix another regression in column rendering
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 26 Feb 2026 11:48:36 +0100
+
+proxmox-widget-toolkit (5.1.7) trixie; urgency=medium
+
+  * fix regression in checkcolumn rendering
+
+  * fix #7087: add task log download button
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 24 Feb 2026 14:14:44 +0100
+
+proxmox-widget-toolkit (5.1.6) trixie; urgency=medium
+
+  * fix #7141: set correct timezone for Kyiv, since it was renamed a while
+    ago.
+
+  * fix #4911: ui: node network edit: fix handling an empty bond-primary field
+    when creating an active-backup bond. The bond-primary property is optional
+    in the API backend, so omit it completely if the field is empty rather
+    than sending an invalid empty-string value.
+
+  * set a more robust default renderer for all column grids descendants.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Feb 2026 18:49:49 +0100
+
+proxmox-widget-toolkit (5.1.5) trixie; urgency=medium
+
+  * RRD metric type selector: correctly adapt applying CSS class to fix ExtJS
+    debug mode.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 09 Dec 2025 09:13:49 +0100
+
+proxmox-widget-toolkit (5.1.4) trixie; urgency=medium
+
+  * RRD metric type selector: adapt applying CSS class to fix ExtJS debug
+    mode.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 05 Dec 2025 16:47:29 +0100
+
+proxmox-widget-toolkit (5.1.3) trixie; urgency=medium
+
+  * api viewer: add support for endpoints that are marked as unstable.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 01 Dec 2025 17:03:14 +0100
+
+proxmox-widget-toolkit (5.1.2) trixie; urgency=medium
+
+  * pending object grid: don't fall back to empty string for false'y values
+    like `0`.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 17 Nov 2025 16:46:52 +0100
+
+proxmox-widget-toolkit (5.1.1) trixie; urgency=medium
+
+  * add Proxmox logo as SVG variant to scale also well on HiDPI displays.
+
+  * logo: increase size of SVG variant to 200x35.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Nov 2025 21:29:17 +0100
+
+proxmox-widget-toolkit (5.1.0) trixie; urgency=medium
+
+  * task description rendered: correctly append an id, if any, to the task
+    description text.
+
+  * fix #6679: system log view: keep X-axis (horizontal) scroll position when
+    updating the scrolling to avoid "jumping" back to the beginning of the
+    line on refresh.
+
+  * acme account: hide e-mail field if it does not exist for an ACME provider.
+
+  * css: add class for making elements unclickable.
+
+  * css: markdown: use unitless number for line-height, as recommended by MDN
+    to avoid unexpected results due to inheritance.
+
+  * css: markdown: explicitly set start padding for list entries to avoid
+    overly large indentation inherited from the browser-default styles.
+
+  * RRD metrics: split time-frame and aggregation-type into two separate
+    selectors. This removes some clutter in the dropdown and allows for a
+    slightly more convenient and intuitive UX, as e.g. one now can quickly
+    switch between average and maximum data points for the same time period.
+
+  * window: add generic ConfirmRemoveDialog that is a parent class of the
+    existing SafeDestroy one.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 10 Nov 2025 10:30:19 +0100
+
+proxmox-widget-toolkit (5.0.6) trixie; urgency=medium
+
+  * css: override css classes for the ExtJS (loading) spinner with our SVG
+    spinner for crisper loading icon.
+
+  * replace pmx-clear-trigger.png with an SVG for crisp rendering on HiDPI.
+
+  * replace openid icon with an SVG for crisp rendering on HiDPI.
+
+  * certificates panel: fix typo in column header label.
+
+  * RRD metric chart: fix customizing axes in a subclass.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 23 Sep 2025 15:42:22 +0200
+
+proxmox-widget-toolkit (5.0.5) trixie; urgency=medium
+
+  * tfa challenge: allow opting into the new http only authentication flow
+    when completing the challenge.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 Aug 2025 12:03:41 +0200
+
+proxmox-widget-toolkit (5.0.4) trixie; urgency=medium
+
+  * network edit: fix hiding of altnames field if disabled by config.
+
+  * RRD chart: fix title lookup for object series.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 04 Aug 2025 16:11:46 +0200
+
+proxmox-widget-toolkit (5.0.3) trixie; urgency=medium
+
+  * RRD metric charts:
+    - allow one to override the series object for more complex graphs
+      controlled by the call site.
+    - allow the Undo tool to not be the 0 indexed item in the tool bar.
+    - set cursor pointer for legend for better UX.
+    - allow users to define a click listener for the legend.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 31 Jul 2025 03:20:54 +0200
+
+proxmox-widget-toolkit (5.0.2) trixie; urgency=medium
+
+  * network selector: add support for passing a type query parameter.
+
+  * fix #6312: limit consent window to viewport size.
+
+  * network: optionally show alternative interface names.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Jul 2025 01:36:58 +0200
+
+proxmox-widget-toolkit (5.0.1) trixie; urgency=medium
+
+  * node service view:
+    - rename 'Syslog' button to 'Service System Log'.
+    - increase log window size depending on viewport size.
+    - grey-out optional systemd-timesyncd and proxmox-firewall if status is
+      unknown.
+
+  * notifications:
+    - fix #5588: smtp: fix Authenticate checkbox in Chromium.
+    - smtp: only show 'Unchanged' in password field when it makes sense.
+    - smtp: don't split translatable string.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Jul 2025 00:30:12 +0200
+
+proxmox-widget-toolkit (5.0.0) trixie; urgency=medium
+
+  * re-build for Debian 13 Trixie based Proxmox project releases.
+
+  * re-format source code with Biome based tooling and use it to replace
+    eslint as linter, adapting to various lints – no semantic change inteded.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Jun 2025 16:54:00 +0200
+
+proxmox-widget-toolkit (4.3.11) bookworm; urgency=medium
+
+  * language selector: add Czech as available option.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 14 May 2025 14:41:32 +0200
+
+proxmox-widget-toolkit (4.3.10) bookworm; urgency=medium
+
+  * api request helper: always html-encode string used for error message to
+    avoid potential glitches.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Apr 2025 17:36:56 +0200
+
+proxmox-widget-toolkit (4.3.9) bookworm; urgency=medium
+
+  * authentication realms: consistently use title case.
+
+  * password edit: support specifying a hint.
+
+  * add formatted guest identifier override option to safe destroy dialog
+    window.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Apr 2025 12:38:32 +0200
+
+proxmox-widget-toolkit (4.3.8) bookworm; urgency=medium
+
+  * node tasks: align view task button label to other uses.
+
+  * node tasks: add action column with button to view task.
+
+  * make use htmlEncode in various rendere to avoid glitches.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 04 Apr 2025 17:05:43 +0200
+
+proxmox-widget-toolkit (4.3.7) bookworm; urgency=medium
+
+  * authentication realm edit: use correct property to derive the realm type.
+
+  * authentication view: allow downstream users to override the API path to
+    query available authentication realms from.
+
+  * from: realm combobox: allow downstream users to override the API path to
+    query available authentication realms from.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 26 Feb 2025 19:12:24 +0100
+
+proxmox-widget-toolkit (4.3.6) bookworm; urgency=medium
+
+  * object grid: fix onlineHelp setting from editorConfig for row editors
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 25 Feb 2025 18:08:50 +0100
+
+proxmox-widget-toolkit (4.3.5) bookworm; urgency=medium
+
+  * add form-field component for entering certificate fingerprints
+
+  * fix #6088: notification: matcher: use more descriptive strings
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 25 Feb 2025 17:08:11 +0100
+
+proxmox-widget-toolkit (4.3.4) bookworm; urgency=medium
+
+  * textarea field: add emptyText message to show markdown is supported
+
+  * add missing htmlEncode for some UI elements
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Jan 2025 11:38:34 +0100
+
+proxmox-widget-toolkit (4.3.3) bookworm; urgency=medium
+
+  * display-edit field: add emptyText getter and setter to support binding to
+    the property of the underlying edit-field directly.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Nov 2024 12:25:44 +0100
+
+proxmox-widget-toolkit (4.3.2) bookworm; urgency=medium
+
+  * node: service state: restore original behavior
+
+  * window: add consent modal widget
+
+  * object grid: add support for multiline textarea widget
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 25 Nov 2024 18:32:21 +0100
+
+proxmox-widget-toolkit (4.3.1) bookworm; urgency=medium
+
+  * peraration to fix #5379: panel: authentication realm view: add opt-in
+    column displaying whether the realm is default and allow enabling it for a
+    realm
+
+  * various UX improvements for the webhook edit window:
+    - improve layout and component hierarchy
+    - use type in add button text
+    - show empty-text to key-value fields
+    - display validity for added key/value fields immediately
+
+  * add Bulgarian as available language
+
+  * dark theme: make icons in the permissions tree in Proxmox VE UI dark
+
+  * fix #3892: network: add bridge VIDs field for Linux bridge and enable them
+    if VLAN-aware is enabled.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 Nov 2024 12:40:04 +0100
+
+proxmox-widget-toolkit (4.3.0) bookworm; urgency=medium
+
+  * css: add some conditions to the tag classes for the tag view
+
+  * utils: add base64 conversion helper
+
+  * notification: add UI for adding/updating webhook targets
+
+  * fix #5836: ui: translate systemd states in system service view
+
+  * fix #5611: node service view: hide non-installed system services by
+    default
+
+  * password edit: allow one to override the minimum length parameter
+
+  * fix #5831: ui: right-align s.m.a.r.t numerical table data
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 11 Nov 2024 21:57:31 +0100
+
+proxmox-widget-toolkit (4.2.4) bookworm; urgency=medium
+
+  * notification: matcher: match-field: show known fields/values
+
+  * notification: matcher: move match-severity and match-calendar fields to
+    panel
+
+  * css: dark theme: fix panel borders for the Proxmox Mail Gateway's EOL
+    notice widget
+
+  * fix opening a link from another site to a web UI of our products by
+    setting the auth-cookie's 'SameSite' attribute to lax, which is the safe
+    default in modern browsers.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Oct 2024 18:54:37 +0200
+
+proxmox-widget-toolkit (4.2.3) bookworm; urgency=medium
+
+  * realm edit: don't send type as extra parameter when 'useTypeInUrl' is set
+
+  * realm edit: don't send 'delete' parameter when creating new entry
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 25 Apr 2024 11:45:12 +0200
+
+proxmox-widget-toolkit (4.2.2) bookworm; urgency=medium
+
+  * form: move network VLAN field widget over from PVE
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 24 Apr 2024 21:44:12 +0200
+
+proxmox-widget-toolkit (4.2.1) bookworm; urgency=medium
+
+  * fix #5251: tfa: set one-time-code auto-complete hint on TOTP input field
+
+  * sendmail: smtp: allow one to override the default mail author
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 23 Apr 2024 19:25:06 +0200
+
+proxmox-widget-toolkit (4.2.0) bookworm; urgency=medium
+
+  * window: add widget for Active Directory specific LDAP-like authentication
+
+  * window: ldap: add tooltips for firstname, lastname and email attributes
+
+  * dark-mode: set intentionally black icons to `$icon-color`
+
+  * window: edit: avoid sharing custom config objects between subclasses
+
+  * i18n: make various user-facing strings translatable
+
+  * remove button: allow one to set custom confirmation message
+
+  * notify: change 'Remove' button to 'Reset' for built-in targets
+
+  * css: correctly mask disabled elements inside headers
+
+  * fix #5277: move reset button into window header toolbar. The form reset
+    and the form submit button where located besides each other with the exact
+    same styling. This made it easy to click the wrong one by accident, while
+    most of the time not a huge issue, it's quite annoying and just
+    unnecessary to do it this way. Moving the reset functionality into the
+    header, besides the close tool, avoid this potential mis-click and makes
+    the form simpler in general. Mis-clicks between the close and the reset
+    tool in the header are not an issue because they both have the same level
+    of destructiveness w.r.t. pending data. Using the font-awesome undo icon
+    makes it quite clear and a tooltip, which is also exposed as ARIA label,
+    helps to further improve accessibility.
+
+  * notes view:
+    - place collapse tool on the right
+    - use pencil-square-o icon for opening the editor
+    - make opening the editor on double-click opt-in to avoid interfering with
+      word-boundary selection of text by default.
+
+  * network edit: allow bridges to have any valid interface name
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 21 Apr 2024 12:31:26 +0200
+
+proxmox-widget-toolkit (4.1.5) bookworm; urgency=medium
+
+  * dns: provide option to change behavior from sending the new, full actual
+    state to what actually changed. This fixes deleting entries in APIs like
+    the one from PBS.
+
+  * edit window: add optional custom submit options
+
+  * certificates: removal prompt: don't display name if there is no name
+
+  * utils: api request: defer masking after layout
+
+  * window: password edit: add opt-in config to show a confirmation-password
+    field for the current user
+
+  * window: password edit: clarify labels
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 21 Mar 2024 17:40:54 +0100
+
+proxmox-widget-toolkit (4.1.4) bookworm; urgency=medium
+
+  * fix #5074: notify: sendmail smtp: fix mailto/mailto-user parameter
+    deletion
+
+  * i18n: use correct ISO 639-1 code for Korean with backward compat
+
+  * form: date time: fix changing date to end of month from a longer to a
+    shorter month
+
+  * form: combo grid: allow one to force showing a clear trigger through a new
+    showClearTrigger config value
+
+  * utils: add mechanism to add and override translatable notification event
+    descriptions in the product specific UIs
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 28 Feb 2024 11:46:31 +0100
+
+proxmox-widget-toolkit (4.1.3) bookworm; urgency=medium
+
+  * notification ui: change icon for match-field tree nodes to avoid clash
+    with use for LXC containers
+
+  * notification ui: display yellow warning triangle instead of red icon if
+    the repesctive entry is not valid
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 Nov 2023 10:12:50 +0100
+
+proxmox-widget-toolkit (4.1.2) bookworm; urgency=medium
+
+  * notification matcher: fix inverted match modes
+
+  * notification ui: add appropriate onlineHelp anchors
+
+  * notification ui: add 'unknown' to match-severity dropdown
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Nov 2023 21:35:56 +0100
+
+proxmox-widget-toolkit (4.1.1) bookworm; urgency=medium
+
+  * api-viewer: implement basic oneOf support
+
+  * form: displaye-edit: add one of the two missing returns
+
+  * notification ui: rework for new matcher based approach, drop old filter
+    and grouping widgets
+
+  * notification: matcher: add UI for matcher editing
+
+  * panel: notification: add gui for SMTP endpoints
+
+  * notification ui: add enable checkbox for targets/matchers
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 17 Nov 2023 16:56:06 +0100
+
+proxmox-widget-toolkit (4.1.0) bookworm; urgency=medium
+
+  * text field: add trimValue option to auto-trim leading and trailing
+    whitespace from the to be submitted value
+
+  * schema: endpoint types: don't translate endpoint type names
+
+  * adapt the date time field to be more declarative
+
+  * fix #4442: extend the log view for firewall to allow filtering by a
+    date-time range
+
+  * disk list: render osdid-list if present
+
+  * file-level restore: enable the download-as-tar button by default, all use
+    sites support that feature now.
+
+  * apt updates: drop handling the ChangeLogUrl, it's not returned anymore
+
+  * combo grid: initialize value with [] by default to avoid glitches where
+    ExtJS sometimes does not finishes with initializing everything
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 14 Nov 2023 09:11:23 +0100
+
+proxmox-widget-toolkit (4.0.9) bookworm; urgency=medium
+
+  * fix using gettext with parameter in various newly added notification and
+    sendmail widgets
+
+  * parser: split checking IMG and A tags, make the latter more strict
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Oct 2023 10:39:31 +0200
+
+proxmox-widget-toolkit (4.0.8) bookworm; urgency=medium
+
+  * fix #4531: acme plugins: correct change detection of dirty form fields
+
+  * fix #4951: accept undefined as value for the multi-disk selector
+
+  * auth: ldap: openid: use our proxmox textfield variant for the comment
+    field to avoid that an empty comments are saved in the config
+
+  * utils: language map: add entry for new Croatian translation
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 13 Sep 2023 17:16:01 +0200
+
+proxmox-widget-toolkit (4.0.7) bookworm; urgency=medium
+
+  * fix #4874: improve error message for invalid hostname
+
+  * add entry for Georgian translation
+
+  * fix the UI not refreshing after successful certificate deletion
+
+  * add missing htmlEncode calls to network selector and apt repository panel
+
+  * add panels for notification system:
+    - sendmail endpoint panel
+    - gotify endpoint panel
+    - notification group management panel
+    - notification filter management panel
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Aug 2023 10:43:02 +0200
+
+proxmox-widget-toolkit (4.0.6) bookworm; urgency=medium
+
+  * LDAP realm edit: forbid specifying a bind_dn without a password
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 26 Jun 2023 20:24:57 +0200
+
+proxmox-widget-toolkit (4.0.5) bookworm; urgency=medium
+
+  * add Українська - Ukrainian to language map
+
+  * apt repositories: add production ready warnings for Ceph repositories
+
+  * add TOTP second factor: increase the size of the quiet zone for the QR
+    code, following general recommendation to make scanning it more robust
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Jun 2023 15:58:27 +0200
+
+proxmox-widget-toolkit (4.0.4) bookworm; urgency=medium
+
+  * apt repositories: fix typo for getting the default unknown text
+
+  * apt repositories: avoid potential type error in classifyOrigin helper
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 09 Jun 2023 17:29:44 +0200
+
+proxmox-widget-toolkit (4.0.3) bookworm; urgency=medium
+
+  * date time field: fix typo in xtype name but add alias for backward compat
+
+  * set 'SameSite' attr of auth cookie to 'strict', which modern browsers
+    already ensured in practice
+
+  * apt repositories: actually ignore ignore-pre-upgrade-warning
+
+  * apt repositories: just ignore unknown info rather than throwing an error
+
+  * apt repositories: detect mixed suites before major upgrade
+
+  * tfa: improve UX for recovery keys and when none are left
+
+  * tfa: show 'Locked' in 'Enabled' column if tfa is locked
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 09 Jun 2023 08:07:01 +0200
+
+proxmox-widget-toolkit (4.0.2) bookworm; urgency=medium
+
+  * markdown parser: allow setting "target" attribute for links
+
+  * fix #4756: markdown parser: allow any valid URL for link (a) tags,
+    allowing one to add short-cuts like a RDP url to quickly open the remote
+    viewer.
+
+  * ship a minified version of the widget-toolkit JS library
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 03 Jun 2023 13:45:27 +0200
+
+proxmox-widget-toolkit (4.0.1) bookworm; urgency=medium
+
+  * tfa: paperkey: cleanup iframes for printing after window close
+
+  * parser: adapt to calling convention of updated Markdown renderer library
+    "marked" has since its v4.0.0
+
+  * fix #4551: ui: translate byte unit in `format_size`
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 01 Jun 2023 16:35:32 +0200
+
+proxmox-widget-toolkit (4.0.0) bookworm; urgency=medium
+
+  * re-build for Debian 12 Bookworm based releases
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 25 May 2023 09:13:29 +0200
+
+proxmox-widget-toolkit (3.7.0) bullseye; urgency=medium
+
+  * dark-mode:
+    - fix focus and focus-over states for tabs
+    - fix the focused state for background image grid icons
+    - style the icon for the datastore maintenance mode
+    - improve apt repo group header contrast ratios
+    - adjust panel header tool icons
+    - fix #4618: lighten critical/warning charts/gauges colors
+
+  * form: combo grid: use correct method to initialize the picker to ensure
+    it's cleaned up again after closed.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 17 May 2023 14:02:50 +0200
+
+proxmox-widget-toolkit (3.6.5) bullseye; urgency=medium
+
+  * window: ldap auth edit: avoid relying on the default bind property
+
+  * window: ldap auth edit: set view-model form data explicitly on edit to
+    avoid a data race in chromium based browser that could result in a
+    mismatch of the configured value and the initially shown one.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 28 Mar 2023 17:56:10 +0200
+
+proxmox-widget-toolkit (3.6.4) bullseye; urgency=medium
+
+  * dark-mode:
+    - improve contrast on split buttons
+    - color the custom grid and tree icons
+    - set boundlist (combo box picker) background so that loading progress or
+      errors are styled correctly too
+    - add a small white padding to the TOTP QR-code, as some apps are confused
+      otherwise
+    - fix #4617: increase brightness of tree expand/collapse arrows to avoid
+      overly low contrast
+
+  * fix #4612: mobile: avoid crash due to missing getProxy method
+
+  * theme edit window: ensure that the saved theme is actually valid
+
+  * language selector: translate entries to both native and localized variants
+
+  * language selector: increase picker list view width
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 26 Mar 2023 17:52:48 +0200
+
+proxmox-widget-toolkit (3.6.3) bullseye; urgency=medium
+
+  * dark-mode fine-tuning:
+    - fix highlighting of active elements in drop down menus
+    - set the icon color of filtered column headers properly
+    - style checkboxes that don't use blueish active states
+    - style locked guest icons properly
+    - tone down border on ceph install card-like window
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 Mar 2023 13:25:05 +0100
+
+proxmox-widget-toolkit (3.6.2) bullseye; urgency=medium
+
+  * network edit: add tooltip to bridge ports inputs
+
+  * dark-mode: reduce background mask opacity to 0.5
+
+  * dark-mode: make window shadow black again to avoid a backlight that some
+    have very strong opionions against
+
+  * rename "Theme" selector to "Color Theme" to add some context for
+    translation
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 21 Mar 2023 16:46:27 +0100
+
+proxmox-widget-toolkit (3.6.1) bullseye; urgency=medium
+
+  * repo view: replace non-clickable checkbox with icons
+
+  * auth ui: add LDAP realm-edit panel and sync UI, refactored & adapted from
+    the pve-manager implementation for future reuse
+
+  * dark-theme: improve help button contrast ratios in focused state
+
+  * dark-theme: make "sorted-by" header highlight more subtle
+
+  * dark-theme: dim warning and invalid colors more
+
+  * dark-theme: let the background "shine through" mask more to avoid that
+    information on it becomes unreadable
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Mar 2023 14:13:42 +0100
+
+proxmox-widget-toolkit (3.6.0) bullseye; urgency=medium
+
+  * node apt: make changelog window taller for 4:3 ratio and cleanup/modernize
+    code
+
+  * ui: SMART: show SMART data in correct columns with correct values
+
+  * fix #4421: ui: guard setProxy against races of slow vs fast requests
+
+  * dark-theme: add initial version of the proxmox-dark theme
+
+  * subscription/summary/backup: stop setting the background color
+
+  * gauge widget: add support for a dark theme and dynamic theme switching
+
+  * rrd chart: add support for the dark theme and dynamic theme switching
+
+  * form: add a theme selector window
+
+  * dark-theme:
+    - fix summary row background
+    - increase contrast on check-boxes
+    - visually remove the border around the pve resource tree
+    - remove thicker borders around content
+    - re-work buttons colors to appear dimmer
+    - make windows stand out more against the background mask
+
+  * fix #4585 : toolkit: configid type: add missing "-" character support
+
+  * input panel: improve validity change check for advanced fields
+
+  * auth-realm selector: add custom store filters for callers
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 14 Mar 2023 16:25:37 +0100
+
+proxmox-widget-toolkit (3.5.5) bullseye; urgency=medium
+
+  * combobox grid: use the grids view for the error message
+
+  * combobox grid: make height for the error configurable
+
+  * combobox grid: instead of hiding the picker collapse it, keeping the
+    internal state consitent which avoids, among other things, the need
+    fo two clicks after re-selecting an item
+
+  * utils: always html-encode response message from errors to avoid rendering
+    glitches, that while not known to be problematic from a safety POV, are
+    possibly odd for people to find.
+
+  * form: display-edit: add safe default renderer for display field to avoid
+    unproblematic, but possible odd and glitchy side-effects from the
+    value-bind if the display-edit field is in iput mode.
+
+  * api request: add wide spread alert-error logic as smart-on option
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 31 Jan 2023 17:27:41 +0100
+
+proxmox-widget-toolkit (3.5.4) bullseye; urgency=medium
+
+  * api-viewer: allow text selection in the parameter and the return grids
+
+  * task viewer: add optional button to download full task-log
+
+  * permission role selector: fix renderer for column of included privileges
+    for Proxmox VE
+
+  * permission role selector: make slightly more wide and resizeable
+
+  * node network view: rework finding free interface ID and move add-menu
+    generation to common helper (no semantic change intended)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 11 Jan 2023 16:09:53 +0100
+
+proxmox-widget-toolkit (3.5.3) bullseye; urgency=medium
+
+  * css: do not make full-style tags display as inline-block in the tree
+    to avoid height jumps
+
+  * log, journal view: fix access to `me` after destroying
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Nov 2022 11:14:27 +0100
+
+proxmox-widget-toolkit (3.5.2) bullseye; urgency=medium
+
+  * host disks: add 'mounted' column
+
+  * host disk: handle partition data from Proxmox Backup Server backend
+
+  * number field: avoid that a single up/down arrow key press
+    increment or decrements twice
+
+  * toolkit: make email regex pattern match pve-common
+
+  * css: import action column fix from pbs, pmg
+
+  * fix #2703: networkedit: limit custom interface name field to 15
+    characters.
+
+  * task progress: show text instead of bogus percentage
+
+  * fix #3593: add CPU affinity task set type
+
+  * input panel: add onSetValues hook
+
+  * add tag related helpers
+
+  * toolkit: add override for ExtJS DragDropManager to fix selection behavior
+    in the drag zone
+
+  * rdd charts: don't display power-of-two suffix 'i' for values without unit
+    suffix
+
+  * fix #4271: api-viewer: display nested formats instead of `[object Object]`
+
+  * api-viewer: show min/max for values without any other format
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Nov 2022 08:37:26 +0100
+
+proxmox-widget-toolkit (3.5.1) bullseye; urgency=medium
+
+  * pxar file types: fix over-eager s/text/label/ so that text file icon is
+    shown again
+
+  * file browser: disable item # size rendering
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 May 2022 18:03:35 +0200
+
+proxmox-widget-toolkit (3.5.0) bullseye; urgency=medium
+
+  * file browser: try reload again when getting a 503 error
+
+  * ui: acl role selector: make the picker grid wider and ensure that the
+    text wraps in the privilege column
+
+  * fix #4001: file browser: add a configurable prefix to downloaded files
+
+  * fix #4001: file browser: show number of items in a directory as size, if
+    available
+
+  * file browser: align size column to end/right
+
+  * file browser: only disable, not hide button if not downloadable and add
+    hint for why and what to do in tooltip
+
+  * switch to native version format for native package
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 15 May 2022 11:46:54 +0200
+
+proxmox-widget-toolkit (3.4-10) bullseye; urgency=medium
+
+  * css: add proxmox-good-row class
+
+  * status view: fix usage calculation for fields without valid values, like
+    for example SWAP can often be.
+
+  * buttons: add AltText to unify the hack to detect the max size of a button
+    that switches its text dynamically
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 27 Apr 2022 18:58:21 +0200
+
+proxmox-widget-toolkit (3.4-9) bullseye; urgency=medium
+
+  * file browser: optionally allow showing a "download as tar.zst"
+    button, if supported
+
+  * tab buttons: fix vertial centering of text and reduce padding
+    slightly
+
+  * move over the markdown based notes view panel and edit window from
+    pve-manager for reuse
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 14 Apr 2022 07:56:54 +0200
+
+proxmox-widget-toolkit (3.4-8) bullseye; urgency=medium
+
+  * fix #3919: log view: show first task output line correctly
+
+  * combo grid: clear filter on blur
+
+  * utils: clear cookies with secure flag set to avoid bogus browser
+    warning
+
+  * node tasks: do not count preset filters as normal filters to avoid
+    "clear filter" button glitch
+
+  * icons: switch cpu and ram bitmaps to svg
+
+  * object grid: call rendere with our scope
+
+  * dns view: increase api polling intervall from 1s to 10s
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 12 Apr 2022 16:45:50 +0200
+
+proxmox-widget-toolkit (3.4-7) bullseye; urgency=medium
+
+  * extjs: fix check for 'touch' input event in drag and drop handler, making
+    the 'pen' pointer event source type, that chrome/chromium emits in some
+    setups, work again.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Feb 2022 12:12:13 +0100
+
+proxmox-widget-toolkit (3.4-6) bullseye; urgency=medium
+
+  * utils: render language: fix rendering special default value
+
+  * sorters: use correct property 'direction' and keep default 'ASC'
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 14 Feb 2022 11:34:42 +0100
+
+proxmox-widget-toolkit (3.4-5) bullseye; urgency=medium
+
+  * login: tfa: hide u2f and yubico-otp if not available
+
+  * improve error handling when adding webauthn entries
+
+  * toolkit: fix noisy ext warning of feature we do not want/use
+
+  * zfs detail: increase default window height
+
+  * zfs detail: hide the pool itself in tree view
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 13 Jan 2022 12:52:18 +0100
+
+proxmox-widget-toolkit (3.4-4) bullseye; urgency=medium
+
+  * utils: format duration: render years when we can avoid huge day numbers
+
+  * journalview: fix wrong initial load with default timespan on widget
+    creation
+
+  * logpanel: fix glitching on fast task logs
+
+  * logpanel: actually catch up when following the log for tasks with an
+    almost artificially high log output traffic
+
+  * log viewer: add heuristic for scroll-direction dependent ratio
+    distribution
+
+  * log viewer: add heuristic for triggering a new limit load earlier to
+    reduce latency on casual scrolling
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 24 Nov 2021 18:29:56 +0100
+
+proxmox-widget-toolkit (3.4-3) bullseye; urgency=medium
+
+  * data: diffstore: fix autoDestroyRstore option (regression from ExtJS 7)
+
+  * ui: OpenID edit: make username-claim field editable for arbitrary values
+
+  * ui: OpenID realm: allow to edit scopes
+
+  * ui: OpenID realm: allow to edit prompt
+
+  * ui: OpenID realm: allow to edit acr values
+
+  * form: copy BandwidthSelector/SizeField from Proxmox VE's manager
+
+  * bandwidth/utils: move out SizeUnits definition to more common module
+
+  * utils: add size unit related helpers to parse/auto-scale/format
+
+  * bandwidth field: allow to submit auto-scaled size-units as string
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 20 Nov 2021 21:41:37 +0100
+
+proxmox-widget-toolkit (3.4-2) bullseye; urgency=medium
+
+  * TFA login window: fix a formatted label showed when being low on unused
+    recovery-keys
+
+  * proxmox checkbox: add clearOnDisable config
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 15 Nov 2021 10:23:34 +0100
+
+proxmox-widget-toolkit (3.4-1) bullseye; urgency=medium
+
+  * panel/RRDCharts: enable scrolling for RRDCharts on touchscreens
+
+  * disk selector: allow requesting partitions too
+
+  * fix #3589: show device name in title for SMART values window
+
+  * cbind: document cbind by adding a small summary and example
+
+  * add common utils used for u2f and webauthn, adapted from PVE and PBS,
+    respectively
+
+  * add TFA-login, TOTP, WebAuthn and recover-key edit windows for better reuse
+
+  * disk list: allow wiping individual partitions
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Nov 2021 21:11:16 +0100
+
+proxmox-widget-toolkit (3.3-6) bullseye; urgency=medium
+
+  * fix #3542: node: task logs: query correct node for tasks in clusters
+
+  * node: add a, by default hidden, MTU column in network view
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 27 Jul 2021 16:41:01 +0200
+
+proxmox-widget-toolkit (3.3-5) bullseye; urgency=medium
+
+  * node: repos: add possibility to link online help
+
+  * api-viewer: drop extra slash in api path
+
+  * apt: match "Debian Backports" origin as Debian one
+
+  * add new shared component for the package version window
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 19 Jul 2021 17:52:08 +0200
+
+proxmox-widget-toolkit (3.3-4) bullseye; urgency=medium
+
+  * acme: allow wildcards as domain
+
+  * service view: avoid showing not installed services as error
+
+  * service view: fix stale stop/restart button enabled behavior
+
+  * service view: disable all buttons for masked/not-found/unknown services
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 13 Jul 2021 18:42:51 +0200
+
+proxmox-widget-toolkit (3.3-3) bullseye; urgency=medium
+
+  * realm view/edit: make more generic for better reuse
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 12 Jul 2021 09:52:27 +0200
+
+proxmox-widget-toolkit (3.3-2) bullseye; urgency=medium
+
+  * node: repos: only show suites warning at the top if enabled repository is
+    affected
+
+  * move over authentication-real edit window widget from Proxmox VE
+
+  * utils: add helper to format node's repository status
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 09 Jul 2021 17:30:43 +0200
+
+proxmox-widget-toolkit (3.2-5) bullseye; urgency=medium
+
+  * network: always ask for confirmation before removing a network
+    interface from the configuration. While it is not that dangerous as we
+    have a pending config that needs to get applied, it still is nicer to do
+    for remove actions.
+
+  * node: tasks: use helper to format status again for a localized warnings
+    text
+
+  * window: safe-destroy: add taskDone and apiCallDone callbacks
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 08 Jul 2021 14:30:44 +0200
+
+proxmox-widget-toolkit (3.2-4) bullseye; urgency=medium
+
+  * node: APT repositories: upgrade "no Proxmox product repo configured" from
+    warning to error
+
+  * node: task history: deselect entries when filter changes
+
+  * node: task history: show errors on store load
+
+  * node: task history: add 'clear filter' button
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 05 Jul 2021 16:50:23 +0200
+
+proxmox-widget-toolkit (3.2-3) bullseye; urgency=medium
+
+  * node: repos: handle that components can be undefined
+
+  * markdown: encode bad nodes HTML instead of pruning it
+
+  * markdown: make sanitizer more strict in filtering tags and ensure that the
+    src and the href attributes point to a HTTP url, or is a data-url on a
+    image.
+
+  * info widget: early return from update if text & value stayed the same
+
+  * utils: updateColumnWidth: drop duplicate implementation and allow
+    overriding tresholdWidth
+
+  * utils: updateColumnWidth: directly calculate column count by threshold,
+    automatically using more columns on wide containers.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 05 Jul 2021 10:10:47 +0200
+
+proxmox-widget-toolkit (3.2-2) bullseye; urgency=medium
+
+  * avoid using unique ids for components that may have more than one instance
+    at the same time. Fixes and issue with switching between nodes on the new
+    APT Repository panel.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 05 Jul 2021 09:47:46 +0200
+
+proxmox-widget-toolkit (3.2-1) bullseye; urgency=medium
+
+  * css: some markdown heading and paragraph font-size & padding tuning
+
+  * node: services: fix logic for displaying unit state
+
+  * add Debian and Proxmox symbol logos and css
+
+  * node: apt: spawn a window for adding repository
+
+  * utils: add getOpenIDRedirectionAuthorization helper
+
+  * factor out userid parsing and username, realm renderer to Utils
+
+  * add OpenID icon + css class
+
+  * node: APT Repositories: rework top status and error grid
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 03 Jul 2021 00:12:34 +0200
+
+proxmox-widget-toolkit (3.1-4) bullseye; urgency=medium
+
+  * cbind mixin: also descend in elements with an cbind property
+
+  * node: tasks: merge improved Filters over from Proxmox Backup Server
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 28 Jun 2021 19:14:10 +0200
+
+proxmox-widget-toolkit (3.1-3) bullseye; urgency=medium
+
+  * css: markdown: add some nicer table, blockquote and task-list checkbox
+    styling
+
+  * Journal View: fix flickering in journal livemode
+
+  * node/services: optionally show unit-, and active-states
+
+  * add initial building blocks for an APT repositories UI
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 23 Jun 2021 23:11:37 +0200
+
+proxmox-widget-toolkit (3.1-2) bullseye; urgency=medium
+
+  * ui: network: add, by default hidden, columns for the `vlan-id` and the
+    `vlan-raw-device`
+
+  * add interface for markdown parser and wire-up marked to it
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Jun 2021 15:32:27 +0200
+
+proxmox-widget-toolkit (3.1-1) bullseye; urgency=medium
+
+  * support ExtJS 7
+
+  * object grid: allow one to declaratively specify rows
+
+  * disk list: add wipe disk button which users of this widget can opt-in
+
+  * data/ProxmoxProxy: set responseType to undefined for XMLHTTPRequest
+
+  * ship api-viewer in new proxmox-widget-toolkit-dev package to improve
+    possibility for code reuse
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 02 Jun 2021 16:16:02 +0200
+
+proxmox-widget-toolkit (3.0-2) bullseye; urgency=medium
+
+  * disks: fix regression in S.M.A.R.T. window
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 May 2021 10:34:57 +0200
+
+proxmox-widget-toolkit (3.0-1) bullseye; urgency=medium
+
+  * re-build for Debian 11 Bullseye based releases
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 13 May 2021 19:46:29 +0200
+
+proxmox-widget-toolkit (2.5-4) pve pmg; urgency=medium
+
+  * info widget: set default usage warning threshold from 60% to 75%
+
+  * node disk: S.M.A.R.T.: improve the simple layout and enable autoscroll for
+    long output
+
+  * format/render size: allow one to specify if base 2 or 10 (SI unit) is
+    desired
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 07 May 2021 18:00:29 +0200
+
+proxmox-widget-toolkit (2.5-3) pve pmg; urgency=medium
+
+  * toolkit: update email regex for ACME account to allow more than two domain
+    parts again
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 24 Apr 2021 19:30:08 +0200
+
+proxmox-widget-toolkit (2.5-2) pve pmg; urgency=medium
+
+  * rrd chart: add option to render values and Y-axis with a power-of-two base
+
+  * safe destroy: allow specifying additional items
+
+  * utils: add several render and helper functions from Proxmox VE's manager
+
+  * panel: add StatusView from Proxmox VE's manager
+
+  * utils: add optional error callback to monStoreErrors
+
+  * acme: separate flag to disable the 'domains=' array
+
+  * file browser: support 'virtual'/'v' file type, show errors in messagebox
+    and allow expand 'all'
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Apr 2021 20:34:39 +0200
+
+proxmox-widget-toolkit (2.5-1) pve pmg; urgency=medium
+
+  * panel/acme-domains: fix cyclic dependency in view model
+
+  * tasks: add warningsText
+
+  * window: move FileBrowser widget over from Proxmox Backup Server for re-use
+
+  * window/edit: add option to disable reset button
+
+  * toolkit: override email VType validation
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 13 Apr 2021 09:11:48 +0200
+
+proxmox-widget-toolkit (2.4-9) pve pmg; urgency=medium
+
+  * improve ranged selection and deselection performance in CheckboxModel
+
+  * utils: async api: reject with whole failure response and add helper to
+    alert it
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 23 Mar 2021 11:29:43 +0100
+
+proxmox-widget-toolkit (2.4-8) pve pmg; urgency=medium
+
+  * add async API request and sleep helpers
+
+  * override deselection in CheckboxModel to improve performance
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 22 Mar 2021 16:23:16 +0100
+
+proxmox-widget-toolkit (2.4-7) pve pmg; urgency=medium
+
+  * data: stores: drop storeid requirement
+
+  * add ACME related data models and forms
+
+  * add ACME:
+    - account panel, plugin editing, certificate panel
+    - account and certificate panel
+    - plugin and domain editing
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 16 Mar 2021 13:31:23 +0100
+
+proxmox-widget-toolkit (2.4-6) pve pmg; urgency=medium
+
+  * disk list: partitions do not have a S.M.A.R.T. status, avoid showing
+    'unknown'
+
+  * task viewer: increase default height
+
+  * edit window: advanced: do not permanently enable advanced mode if they are
+    invalid, only show the advanced fields temporarily.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 05 Mar 2021 20:22:00 +0100
+
+proxmox-widget-toolkit (2.4-5) pve pmg; urgency=medium
+
+  * disk list: restore info about ceph
+
+  * disk list: convert to tree-grid and conditionally include partitions
+
+  * fix usage of findRecord for exact matches
+
+  * prune panel: make keep-last label text like the others
+
+  * network: VLAN edit: Fix automatic field disabling and other UX improvements
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 09 Feb 2021 14:31:03 +0100
+
+proxmox-widget-toolkit (2.4-4) pve pmg; urgency=medium
+
+  * data reader: cope with null respones for not configured data, treat like
+    an empty response
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 15 Jan 2021 16:24:08 +0100
+
+proxmox-widget-toolkit (2.4-3) pve pmg; urgency=medium
+
+  * input panel: support convenience top column
+
+  * prune field: use dirtychange event to hide/show clear-trigger
+
+  * prune panel: allow to pass emptyText for keep-last
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 23 Nov 2020 18:46:02 +0100
+
+proxmox-widget-toolkit (2.4-2) pve pmg; urgency=medium
+
+  * input panel: improve column scaling behavior with non-default browser or OS
+    scaling and DPI settings
+
+  * add PruneKeepField and PruneInputPanel component
+
+  * input panel: make advanced column check more flexible
+
+  * edit window: add submitUrl and loadUrl config
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 23 Nov 2020 08:14:50 +0100
+
+proxmox-widget-toolkit (2.3-10) pve pmg; urgency=medium
+
+  * utils: get help info: fix normalization with multiple minuses by using a
+    more compatible approach
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 10 Nov 2020 16:29:09 +0100
+
+proxmox-widget-toolkit (2.3-9) pve pmg; urgency=medium
+
+  * combo grid: set errorMask on store load failure
+
+  * enable ExtJS ARIA accessibility support again
+
+  * Utils: fix help section normalization
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 10 Nov 2020 12:07:55 +0100
+
+proxmox-widget-toolkit (2.3-8) pve pmg; urgency=medium
+
+  * Utils: remove product specific task descriptions
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Nov 2020 17:51:59 +0100
+
+proxmox-widget-toolkit (2.3-7) pve pmg; urgency=medium
+
+  * improve redering of icons in navigation element
+
+  * add a form element for selecting a worker task type
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 02 Nov 2020 07:49:22 +0100
+
+proxmox-widget-toolkit (2.3-6) pve pmg; urgency=medium
+
+  * edit window: add autoLoadOptions to control API call
+
+  * edit window: add extraParams config
+
+  * move over PermissionView from Proxmox VE's manager
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 28 Oct 2020 18:39:41 +0100
+
+proxmox-widget-toolkit (2.3-5) pve pmg; urgency=medium
+
+  * improve multiselect behaviour for checkboxmodel
+
+  * add info widget from Proxmox VE
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 27 Oct 2020 18:34:16 +0100
+
+proxmox-widget-toolkit (2.3-4) unstable; urgency=medium
+
+  * implement and use systemd_unescape
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Oct 2020 12:11:53 +0200
+
+proxmox-widget-toolkit (2.3-3) pve pmg; urgency=medium
+
+  * tasks: ensure the UPID parameter is always correctly encoded
+
+  * move over SafeDestroy widget from pve-manager
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Oct 2020 08:53:18 +0200
+
+proxmox-widget-toolkit (2.3-2) pve pmg; urgency=medium
+
+  * add Korean as translation choice
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 15 Oct 2020 13:27:30 +0200
+
+proxmox-widget-toolkit (2.3-1) pve pmg; urgency=medium
+
+  * log/journal views: fix auto scrolling on browser zoom
+
+  * Utils: improve matching groups of IP/host address regexes
+
+  * Toolkit: add HostPort vtype
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 01 Oct 2020 14:50:35 +0200
+
+proxmox-widget-toolkit (2.2-14) pve pmg; urgency=medium
+
+  * tasks viewer: include API token ID if available
+
+  * node tasks: improve scrollbar behaviour on store load
+
+  * node tasks: add duration column, hide by default to avoid crowding the
+    interface
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Sep 2020 10:16:53 +0200
+
+proxmox-widget-toolkit (2.2-12) pve pmg; urgency=medium
+
+  * fix #2933: disks: correct behaviour of 'Init GPT' button
+
+  * utils: order languages after rendered name
+
+  * add Dutch to language map
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 07 Sep 2020 13:51:00 +0200
+
+proxmox-widget-toolkit (2.2-11) pve pmg; urgency=medium
+
+  * Add focusable pseudo class to edit windows defaultFocus
+
+  * displayedit: allow binding editable and value, and allow passing explicit
+    displayConfig
+
+  * service view: allow overwriting restart command
+
+  * re-bump package for Proxmox Backup Server
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 24 Jul 2020 16:16:52 +0200
+
+proxmox-widget-toolkit (2.2-9) pve pmg; urgency=medium
+
+  * add disk and storage related widgets, factored out from Proxmox VE's manager
+
+  * adapt auth utils for Proxmox token authentication
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 30 Jun 2020 13:36:05 +0200
+
+proxmox-widget-toolkit (2.2-8) pve pmg; urgency=medium
+
+  * format task description: avoid printing undefined ID
+
+  * network edit: display MTU for OVS-bond interfaces too
+
+  * ProxmoxProxy: add duration fields for proxmox-tasks model
+
+  * color and show task with warnings differently
+
+  * improve format_duration_human for small values <0.1s
+
+  * move over disk selection and smart info from Proxmox VE's manager
+
+  * task viewer: show task endtime and duration in status
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 16 Jun 2020 16:49:42 +0200
+
+proxmox-widget-toolkit (2.2-7) pve pmg; urgency=medium
+
+  * button: make xtype of parent configurable
+
+  * fix RRD charts if there's no data legend or no title header
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 04 Jun 2020 18:20:16 +0200
+
+proxmox-widget-toolkit (2.2-6) pve pmg; urgency=medium
+
+  * improve RRD charts
+
+  * utils: add updateColumnWidth helper from PVE
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 03 Jun 2020 11:42:55 +0200
+
+proxmox-widget-toolkit (2.2-5) pve pmg; urgency=medium
+
+  * JournalView: avoid null dereference on quick tab switch
+
+  * form/display edit: use the 'fit' layout to avoid width glitch
+
+  * improve error extraction for monStoreErrors by falling back to printing the
+    whole body if we cannot extract a JSON error object out of it
+
+  * css: add icon colors over from Proxmox VE
+
+  * Utils: add duration format/render
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 28 May 2020 18:36:33 +0200
+
+proxmox-widget-toolkit (2.2-4) pve pmg; urgency=medium
+
+  * fix #2758: detect half-logged-in 'TFA' cookies and avoid treating them like
+    regular login tickets
+
+  * improve default column layout of network and node task history viewer
+
+  * utils: task descriptions: allow to add/override entries and to specify a
+    function
+
+  * render_upid: fallback to worker_id and worker_type
+
+  * ui: task history: add basic handling for currently running tasks
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 25 May 2020 19:04:10 +0200
+
+proxmox-widget-toolkit (2.2-3) pve pmg; urgency=medium
+
+  * pending object grid: mark pending changes as darkorange to avoid
+    misinterpretation as error.
+
+  * move permission management role selector over from Proxmox VE
+
+  * input panel: call setValue on all fields
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 22 May 2020 10:09:26 +0200
+
+proxmox-widget-toolkit (2.2-2) pve pmg; urgency=medium
+
+  * add common proxmoxlogo class definition
+
+  * add authentication realm data model and combo box
+
+  * edit window: read digest also from top level API response
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 May 2020 17:26:04 +0200
+
+proxmox-widget-toolkit (2.2-1) pve pmg; urgency=medium
+
+  * diff-store: allow to also auto-create real-store with schematic config only
+
+  * diff-store: allow to request propagation of destroy to real-store
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 07 May 2020 16:59:59 +0200
+
+proxmox-widget-toolkit (2.1-7) pve pmg; urgency=medium
+
+  * Utils: add auth-realm-sync-test to task descriptions
+
+  * cbind: allow methods in cbindData
+
+  * add missing htmlEncodes userid renderers
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 May 2020 17:14:21 +0200
+
+proxmox-widget-toolkit (2.1-6) pve pmg; urgency=medium
+
+  * DateTimeField: implement setMaxValue and setMinValue
+
+  * monStoreErrors: refactor out and render param exception errors
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 24 Apr 2020 18:47:21 +0200
+
+proxmox-widget-toolkit (2.1-5) pve pmg; urgency=medium
+
+  * add LanguageEditWindow
+
+  * window/Edit: accept bodyPadding from config
+
+  * button: don't auto set selection model if explicitly set to false
+
+  * StdRemoveButton: getUrl: fallback to baseurl if no selModel is set
+
+  * StdRemoveButton: enable button by default if no selection model is set
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 20 Apr 2020 10:44:21 +0200
+
+proxmox-widget-toolkit (2.1-4) pve pmg; urgency=medium
+
+  * ComboGrid: fix validation for !allowBlank disabled fields
+
+  * add Arabic to translated language selector
+
+  * object grid: allow one to pass online help to row editors
+
+  * form: add Proxmox.form.field.ExpireDate
+
+  * open combobox picker on focus even if they are editable (searchable)
+
+  * form: add Proxmox.form.field.DisplayEdit
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Apr 2020 18:05:10 +0200
+
+proxmox-widget-toolkit (2.1-3) pve pmg; urgency=medium
+
+  * networkedit: bond: add bond-primary and MTU field
+
+  * cbind: allow to pass formula function in binding
+
+  * window: edit: allow to set submit text for data binding
+
+  * node/net: add vlan interface support
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 30 Jan 2020 17:49:32 +0100
+
+proxmox-widget-toolkit (2.1-2) pve pmg; urgency=medium
+
+  * task descriptions: add CT push/pull and HA shutdown
+
+  * task UPID: Allow additional (optional) task_id field and show it also in
+    the task viewer window, if available
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 17 Dec 2019 12:02:52 +0100
+
+proxmox-widget-toolkit (2.1-1) pve pmg; urgency=medium
+
+  * fix #2421: ComboGrid: correctly validate multiSelect variant
+
+  * NetworkView: add apply config button
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 26 Nov 2019 13:00:18 +0100
+
+proxmox-widget-toolkit (2.0-9) pve pmg; urgency=medium
+
+  * fix comboBox validation when forceSelection is true
+
+  * add reboot for containers into task description table
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 20 Nov 2019 20:28:12 +0100
+
+proxmox-widget-toolkit (2.0-8) pve pmg; urgency=medium
+
+  * add hebrew to list of languages
+
+  * add qmreboot task description
+
+  * add pmx-hint css class
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 10 Oct 2019 17:04:58 +0200
+
+proxmox-widget-toolkit (2.0-7) pve pmg; urgency=medium
+
+  * combogrid: fix validation if valueField is different than
+    displayField
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Aug 2019 12:45:34 +0200
+
+proxmox-widget-toolkit (2.0-6) pve pmg; urgency=medium
+
+  * combogrid: always set the initial value, even if not found
+
+  * combogrid: add handling for historic set values currently not
+    available
+
+  * Fix #582: allow to move those task which supports it to the
+    background if they're triggered by a standard button
+
+  * ComboGrid: add trigger to delete value from ComboGrid if it allows
+    blank values
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 13 Aug 2019 15:56:56 +0200
+
+proxmox-widget-toolkit (2.0-5) pve pmg; urgency=medium
+
+  * fix syslog panel resizing
+
+  * node network: hide ip and netmask by default
+
+  * node network: refactor bond mode array generation and add Bond Mode
+    and Hash Policy
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Jul 2019 19:33:17 +0200
+
+proxmox-widget-toolkit (2.0-4) pve pmg; urgency=medium
+
+  * network selector: allow to select IP too
+
+  * combogrid: add deleteEmpty and skipEmptyText
+
+  * textfield: validate after allowBlank
+
+  * combo grid: add setAllowBlank to help bindings
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Jun 2019 20:30:37 +0200
+
+proxmox-widget-toolkit (2.0-3) pve pmg; urgency=medium
+
+  * refactor info/link extraction from onlinehelp to utils
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Jun 2019 17:54:42 +0200
+
+proxmox-widget-toolkit (2.0-2) pve pmg; urgency=medium
+
+  * add network selector widget
+
+  * node/apt updates: show full package description conditionally
+
+  * backport fix for ExtJS pie chart tooltip for 0% entries
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Jun 2019 20:47:53 +0200
+
+proxmox-widget-toolkit (2.0-1) pve pmg; urgency=medium
+
+  * bump version for Debian Buster / PVE 6
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 22 May 2019 07:16:02 +0200
+
+proxmox-widget-toolkit (1.0-28) unstable; urgency=medium
+
+  * show IP/CIDR in host network view
+
+  * change nodes host network input from address/netmask to IP/CIDR
+
+  * add panel/JournalView for new mini-journalreader
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 15 May 2019 13:36:50 +0200
+
+proxmox-widget-toolkit (1.0-27) unstable; urgency=medium
+
+  * wait for syslog API calls to complete before requesting new ones
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 07 May 2019 15:13:52 +0000
+
+proxmox-widget-toolkit (1.0-26) unstable; urgency=medium
+
+  * fix #1784: allow one to set UTC as Timezone
+
+  * allow one to filter and search for timezones in the nodes time editor
+
+  * add a combined "IPv6 or IPv4 CIDR" match vtype
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 16 Apr 2019 05:57:58 +0000
+
+proxmox-widget-toolkit (1.0-25) unstable; urgency=medium
+
+  * MacPrefix: prevent multicast MacPrefixes
+
+  * change allowed v6 prefix-length to 128
+
+  * rework panel/LogView
+
+  * add helpers required for u2f authentication
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 03 Apr 2019 13:58:13 +0200
+
+proxmox-widget-toolkit (1.0-24) unstable; urgency=medium
+
+  * add DnsOrIP vtype
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 14 Mar 2019 07:41:44 +0100
+
+proxmox-widget-toolkit (1.0-23) unstable; urgency=medium
+
+  * tasks: put vzdump into VM/CT category
+
+  * fix popup behaviour in firefox with touchscreens on desktop
+
+  * utils: xtermjs: allow to pass a cmd parameter to the terminal
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 28 Feb 2019 10:54:50 +0100
+
+proxmox-widget-toolkit (1.0-22) unstable; urgency=medium
+
+  * form: proxmox textfield: support binding 'allowBlank'
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 29 Nov 2018 12:45:28 +0100
+
+proxmox-widget-toolkit (1.0-21) unstable; urgency=medium
+
+  * Utils: add some task descriptions (disk/storage management and ceph)
+
+  * node/DNS: render DNS fields htmlEncoded
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 22 Nov 2018 14:59:16 +0100
+
+proxmox-widget-toolkit (1.0-20) unstable; urgency=medium
+
+  * add node/HostsView to show/edit /etc/hosts
+
+  * fixup: vlan type: use 'Linux VLAN'
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 14 Sep 2018 12:01:12 +0200
+
+proxmox-widget-toolkit (1.0-19) unstable; urgency=medium
+
+  * add traditional Chinese to language map
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 12 Jun 2018 16:43:58 +0200
+
+proxmox-widget-toolkit (1.0-18) unstable; urgency=medium
+
+  * add missing task description mappings
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 14 May 2018 11:06:33 +0200
+
+proxmox-widget-toolkit (1.0-17) unstable; urgency=medium
+
+  * fix edit windows being reopened on key-up when closing them with the return
+    key
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 May 2018 08:26:34 +0200
+
+proxmox-widget-toolkit (1.0-16) unstable; urgency=medium
+
+  * add getRecord to ObjectStore
+
+  * add apiCallDone callback for window.edit
+
+  * PendingObjectGrid: fix display of deletion of multikey fields
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 02 May 2018 13:25:06 +0200
+
+proxmox-widget-toolkit (1.0-15) unstable; urgency=medium
+
+  * allow pressing enter in ObjectGrids to edit a field
+
+  * better default focus selection
+
+  * add a checkbox to edit windows for advanced options
+
+  * add advanced options to the input panel
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 06 Apr 2018 13:47:56 +0200
+
+proxmox-widget-toolkit (1.0-14) unstable; urgency=medium
+
+  * fix #1223: add touchscreen override for extjs
+
+  * task view, progress: add taskDone callback
+
+  * window/Edit: allow showing TaskViewer instead of TaskProgress
+
+  * add labelWidth to the fieldDefaults in add_*_row
+
+  * add an optional renderer for integer rows in ObjectGrid
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 05 Apr 2018 12:18:49 +0200
+
+proxmox-widget-toolkit (1.0-13) unstable; urgency=medium
+
+  * remove gettext definition in Utils.js
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 08 Mar 2018 11:37:56 +0100
+
+proxmox-widget-toolkit (1.0-12) unstable; urgency=medium
+
+  * skip config property for cbind mixin
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 23 Feb 2018 11:11:38 +0100
+
+proxmox-widget-toolkit (1.0-11) unstable; urgency=medium
+
+  * rename pve(Show|Hide)Help events
+
+  * mixin/CBind: allow binding sub elements
+
+  * show VLAN aware setting in NetworkView.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Feb 2018 13:06:39 +0100
+
+proxmox-widget-toolkit (1.0-10) unstable; urgency=medium
+
+  * port fixes and features from pve-manager since fork
+
+  * add all languages from pve
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 25 Jan 2018 10:19:23 +0100
+
+proxmox-widget-toolkit (1.0-9) unstable; urgency=medium
+
+  * add Xtermjs popup helper
+
+  * Utils: fix some lint errors
+
+  * taskviewer: port over extraTite config parameter
+
+  * ObjectGrid: add_text_row: allow setting vtype for editor
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 11 Dec 2017 14:43:17 +0100
+
+proxmox-widget-toolkit (1.0-8) unstable; urgency=medium
+
+  * remove updatequeue
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 29 Nov 2017 12:09:03 +0100
+
+proxmox-widget-toolkit (1.0-7) unstable; urgency=medium
+
+  * UpdateStore.js - fix update problem with chrome
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 23 Nov 2017 07:29:46 +0100
+
+proxmox-widget-toolkit (1.0-6) unstable; urgency=medium
+
+  * change 'create' parameter to 'isCreate'
+
+  * make network devices types configurable
+
+  * use Proxmox.window.TaskProgress instead of PVE.window.TaskProgress
+
+  * add custom submittext to Edit Window
+
+  * add missing BondModeSelector to widget toolkit
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 14 Nov 2017 11:38:51 +0100
+
+proxmox-widget-toolkit (1.0-5) unstable; urgency=medium
+
+  * use (de)activate events for dns/timeview
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 14 Nov 2017 08:12:09 +0100
+
+proxmox-widget-toolkit (1.0-4) unstable; urgency=medium
+
+  * add textarea/enter workaround
+
+  * fix updateStore destroy
+
+  * RRDChart.js: add the seriesConfig parameter
+
+  * RRDChart.js: add the noTool parameter
+
+  * add autostart and alias to UpdateStore
+
+  * add format_size from pve
+
+  * add GaugeWidget from PVE
+
+  * LanguageSelector.js - add language selector
+
+  * allow to set onlineHelp on Proxmox.window.Edit
+
+  * add HelpButton class
+
+  * new checked_command helper
+
+  * add APT.js
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 24 Oct 2017 08:45:15 +0200
+
+proxmox-widget-toolkit (1.0-3) unstable; urgency=medium
+
+  * monStoreErrors: new option clearMaskBeforeLoad
+
+  * add RRDChart class
+
+  * add RRDStore class
+
+  * add RRDTypeSelector class
+
+  * set default focus and default button for edit window
+
+  * add helpers to render uptime
+
+  * ObjectGrid.js: new monStoreErrors properties
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 Sep 2017 09:37:27 +0200
+
+proxmox-widget-toolkit (1.0-2) unstable; urgency=medium
+
+  * countless improvements
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 05 Apr 2017 10:22:47 +0200
+
+proxmox-widget-toolkit (1.0-1) unstable; urgency=medium
+
+  * first try
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 30 Jan 2017 09:50:33 +0100
+

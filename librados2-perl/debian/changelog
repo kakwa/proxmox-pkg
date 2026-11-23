@@ -1,0 +1,5 @@
+librados2-perl (1.5.1-1) unstable; urgency=low
+
+  * Initial packaging with pakste (changelog is generated at build time).
+
+ -- kakwa <carpentier.pf@gmail.com>  Sun, 22 Nov 2026 22:00:00 +0100

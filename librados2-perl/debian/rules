@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+CFLAGS := -shared -fPIC -g -O2 -Wall
+CFLAGS += -I$(shell perl -MConfig -e 'print $$Config{archlib};')/CORE
+CFLAGS += -DXS_VERSION=\"1.0\"
+
+# where the .so goes (Debian perl arch lib)
+PERL_VENDORARCH := $(shell perl -MConfig -e 'print $$Config{installvendorarch};')
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	xsubpp RADOS.xs -typemap typemap > RADOS.xsc
+	mv RADOS.xsc RADOS.c
+	$(CC) $(CFLAGS) -o RADOS.so RADOS.c -lrados
+
+override_dh_auto_install:
+	install -D -m 0644 PVE/RADOS.pm debian/@NAME@/usr/share/perl5/PVE/RADOS.pm
+	install -D -m 0644 -s RADOS.so debian/@NAME@/$(PERL_VENDORARCH)/auto/PVE/RADOS/RADOS.so
+
+override_dh_auto_test:

@@ -1,0 +1,20 @@
+Source: @NAME@
+Section: perl
+Priority: optional
+Maintainer: @MAINTAINER@ <@MAINTAINER_EMAIL@>
+Build-Depends: debhelper-compat (= 13),
+ libcrypt-dev,
+ librados-dev (>= 19.2.0~),
+ perl,
+ libjson-perl
+Standards-Version: 4.6.2
+Homepage: @URL@
+Rules-Requires-Root: no
+
+Package: @NAME@
+Architecture: any
+Depends: ${shlibs:Depends},
+ ${perl:Depends},
+ ${misc:Depends}
+Description: @SUMMARY@
+ @DESCRIPTION@

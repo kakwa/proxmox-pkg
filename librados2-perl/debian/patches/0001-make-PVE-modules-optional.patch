@@ -1,0 +1,114 @@
+Subject: [PATCH] make the PVE::* modules optional
+From: kakwa <carpentier.pf@gmail.com>
+Date: Sun, 22 Nov 2026 22:30:00 +0100
+
+PVE::Tools, PVE::INotify and PVE::RPCEnvironment only exist on
+Proxmox VE systems (they are not part of Debian). Make them optional
+so that this module can also be used on a plain Debian system:
+
+ - load them on demand and fall back to a local, alarm based
+   implementation of run_with_timeout when PVE::Tools is missing
+   (same semantics as the original helper);
+ - skip the inotify close when PVE::INotify is not loaded;
+ - use an empty environment hash when PVE::RPCEnvironment is not
+   loaded (the module only uses it for the optional atfork handler).
+
+Signed-off-by: kakwa <carpentier.pf@gmail.com>
+---
+--- a/PVE/RADOS.pm
++++ b/PVE/RADOS.pm
+@@ -10,16 +10,54 @@
+ use POSIX;
+ use Socket;
+ 
+-use PVE::Tools;
+-use PVE::INotify;
+-use PVE::RPCEnvironment;
+-
+ require Exporter;
+ 
+ my $rados_default_timeout = 5;
+ my $ceph_default_conf = '/etc/pve/ceph.conf';
+ my $ceph_default_user = 'admin';
+ 
++# PVE::* modules are only available on Proxmox VE systems, make them
++# optional so that this module also works on plain Debian systems.
++my $pve_tools_loaded  = eval { require PVE::Tools; 1 };
++my $pve_inotify_loaded = eval { require PVE::INotify; 1 };
++my $pve_rpcenv_loaded = eval { require PVE::RPCEnvironment; 1 };
++
++# local fallback for PVE::Tools::run_with_timeout (same semantics)
++my $run_with_timeout = sub {
++    my ($timeout, $code, @param) = @_;
++
++    die "got timeout\n" if $timeout <= 0;
++
++    my $prev_alarm = alarm 0; # suspend outer alarm early
++
++    my $sigcount = 0;
++    my $got_timeout = 0;
++
++    my $res;
++
++    eval {
++	local $SIG{ALRM} = sub { $sigcount++; $got_timeout = 1; die "got timeout\n"; };
++	local $SIG{PIPE} = sub { $sigcount++; die "broken pipe\n" };
++	local $SIG{__DIE__};
++
++	alarm($timeout);
++
++	eval { $res = &$code(@param); };
++
++	alarm(0); # avoid race conditions
++
++	die $@ if $@;
++    };
++
++    my $err = $@;
++
++    alarm $prev_alarm;
++
++    # assume that user handles timeout err if called in list context
++    die $err if $err && (!wantarray || !$got_timeout);
++
++    return wantarray ? ($res, $got_timeout) : $res;
++};
+ 
+ our $VERSION = '1.0';
+ 
+@@ -95,7 +133,13 @@
+ 	&$writedata($self->{child}, $cmd, $data) if $expect_tag ne 'S';
+ 	($restag, $raw) = &$readdata($self->{child});
+     };
+-    eval { PVE::Tools::run_with_timeout($self->{timeout}, $code); };
++    eval {
++	if ($pve_tools_loaded) {
++	    PVE::Tools::run_with_timeout($self->{timeout}, $code);
++	} else {
++	    &$run_with_timeout($self->{timeout}, $code);
++	}
++    };
+     if (my $err = $@) {
+ 	&$kill_worker($self);
+ 	die $err;
+@@ -173,7 +217,9 @@
+ sub new {
+     my ($class, %params) = @_;
+ 
+-    my $rpcenv = PVE::RPCEnvironment::get();
++    my $rpcenv = $pve_rpcenv_loaded
++	? eval { PVE::RPCEnvironment::get() } || {}
++	: {};
+ 
+     socketpair(my $child, my $parent, AF_UNIX, SOCK_STREAM, PF_UNSPEC)
+ 	||  die "socketpair: $!\n";
+@@ -201,7 +247,8 @@
+ 	$0 = 'pverados';
+ 
+ 	eval {
+-	    PVE::INotify::inotify_close();
++	    PVE::INotify::inotify_close()
++		if $pve_inotify_loaded;
+ 
+ 	    if (my $atfork = $rpcenv->{atfork}) {
+ 		&$atfork();

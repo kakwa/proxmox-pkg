@@ -12,7 +12,6 @@ Build-Depends: debhelper-compat (= 13),
                libtest-differences-perl,
                perl,
                pve-cluster (>= 9.0.1),
-               pve-firewall (>= 5.1.0~),
                pve-doc-generator (>= 5.3-3),
                libpve-access-control (>= 9.0.1),
 Standards-Version: 4.6.1
